@@ -69,6 +69,8 @@ def test_unmatched_paren_reports_error():
     assert "Expected ')' after expression" in str(ei.value)
 
 def test_unexpected_token_in_primary():
+    # Используем валидный токен, который не может быть primary expression (например, оператор)
+    # Это проверяет, что парсер правильно обрабатывает синтаксические ошибки
     with pytest.raises(ParseError) as ei:
-        ast_json("@;")
+        ast_json("+;")
     assert "Expected primary expression" in str(ei.value)

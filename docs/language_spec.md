@@ -1,10 +1,3 @@
-# MiniLang — Language Specification v1 (freeze for Stages 2–4)
-
-Goal: a minimal yet complete spec to implement the lexer and parser and to build an AST.  
-This version is intentionally small, self-consistent, and ready for implementation.
-
----
-
 ## 1. Lexical structure (tokens)
 
 ### 1.1 Whitespace and comments

@@ -86,7 +86,8 @@ int[] data;
   `func <type> name(params) { ... }`
 - **Procedure:** returns no value:  
   `proc name(params) { ... }`
-- Parameters are comma-separated and may be base or array types.
+- Parameters are comma-separated and typed: `<type> IDENT (',' <type> IDENT)*`
+- Parameters may be base types or array types.
 
 Examples:
 ```
@@ -144,8 +145,8 @@ print(x);   // print the value of expression x
 type       ::= base_type ('[' ']')*
 base_type  ::= 'int' | 'real' | 'bool'
 
-primary    ::= INT | REAL | TRUE | FALSE | IDENT | IDENT '(' args? ')' | '(' expr ')'
-postfix    ::= primary ('[' expr ']')*
+primary    ::= INT | REAL | TRUE | FALSE | IDENT | '(' expr ')'
+postfix    ::= primary ('(' args? ')' | '[' expr ']')*
 unary      ::= ('!' | '+' | '-') unary | postfix
 mul        ::= unary (('*' | '/') unary)*
 add        ::= mul   (('+' | '-') mul)*
@@ -249,16 +250,27 @@ for (i = 0; i < 10; i = i + 1) {
 
 ### 8.3 Function and procedure
 ```
+// Function with typed parameters
 func int add(int a, int b) {
   return a + b;
 }
 
+// Procedure with typed parameter
 proc show(int x) {
   print(x);
 }
 
-int z = add(2, 3);
+// Call in expression
+int z;
+z = add(2, 3);
+
+// Call as statement
 show(z);
+
+// Call with array indexing
+real[][] m;
+m[0][0] = 3.5;
+show(m[0][0]);
 ```
 
 ---

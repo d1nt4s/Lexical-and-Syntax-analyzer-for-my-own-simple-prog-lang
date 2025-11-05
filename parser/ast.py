@@ -93,6 +93,19 @@ class IndexExpr(Expr):
         pad = "  " * indent
         return f"{pad}IndexExpr#{self.id}\n" + self.base.pretty(indent + 1) + self.index.pretty(indent + 1)
 
+@dataclass
+class CallExpr(Expr):
+    callee: str = ""
+    args: List[Expr] = field(default_factory=list)
+    def to_json(self) -> Dict[str, Any]:
+        return {"type": "CallExpr", "id": self.id, "callee": self.callee, "args": [a.to_json() for a in self.args]}
+    def pretty(self, indent: int = 0) -> str:
+        pad = "  " * indent
+        s = f"{pad}CallExpr#{self.id}({self.callee})\n"
+        for a in self.args:
+            s += a.pretty(indent + 1)
+        return s
+
 # === Операторы и верхний уровень (Этап 4) ===
 
 class TypeKind(Enum):
@@ -104,6 +117,17 @@ class TypeKind(Enum):
 class TypeSpec(Node):
     """Base class for type specifications."""
     pass
+
+@dataclass
+class Param(Node):
+    type_spec: TypeSpec = None
+    name: str = ""
+    def to_json(self) -> Dict[str, Any]:
+        return {"type": "Param", "id": self.id, "type_spec": self.type_spec.to_json(), "name": self.name}
+    def pretty(self, indent: int = 0) -> str:
+        pad = "  " * indent
+        type_str = self.type_spec.pretty(0).strip() if self.type_spec else "UNKNOWN"
+        return f"{pad}Param#{self.id}({type_str} {self.name})\n"
 
 @dataclass
 class BaseType(TypeSpec):
@@ -264,16 +288,16 @@ class Return(Stmt):
 
 @dataclass
 class FuncDef(Stmt):
-    # для v1 параметры опционально пустые; функции могут возвращать значение (func) или быть процедурами (proc)
+    # функции могут возвращать значение (func) или быть процедурами (proc)
     name: str = ""
     is_proc: bool = True
     ret_type: Optional[TypeSpec] = None    # только если is_proc == False
     body: Block = None
-    params: List[str] = field(default_factory=list)  # упрощённо: только имена
+    params: List[Param] = field(default_factory=list)  # типизированные параметры
     def to_json(self) -> Dict[str, Any]:
         obj = {"type": "FuncDef", "id": self.id, "name": self.name,
                "kind": "proc" if self.is_proc else "func",
-               "params": self.params,
+               "params": [p.to_json() for p in self.params],
                "body": self.body.to_json()}
         if not self.is_proc and self.ret_type is not None:
             obj["ret_type"] = self.ret_type.to_json()
@@ -287,7 +311,7 @@ class FuncDef(Stmt):
             kind = f"func:{type_str}"
         s = f"{pad}FuncDef#{self.id}({kind} {self.name})\n"
         for p in self.params:
-            s += f"{pad}  param({p})\n"
+            s += p.pretty(indent + 1)
         s += self.body.pretty(indent + 1)
         return s
 

@@ -25,3 +25,15 @@ for f in examples/*.txt; do
   echo ">>> $f"
   python -m main.main "$f" --json || true
 done
+
+## Calls and typed parameters
+
+# Function with typed parameters
+func int add(int a, int b) { return a + b; }
+
+# Procedure with typed parameter
+proc show(int x) { print(x); }
+
+# Run samples
+python -m main.main examples/valid_calls_1.txt --json
+python -m main.main examples/valid_calls_2.txt --json

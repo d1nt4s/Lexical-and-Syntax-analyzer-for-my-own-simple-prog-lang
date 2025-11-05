@@ -1,0 +1,5 @@
+// missing ')'
+func int id(int a) { return a; }
+int y;
+y = id(10;    // syntax error: expected ')' after arguments
+

@@ -4,8 +4,8 @@ from lexer.tokens import Token, TokenKind
 from parser.ast import (
     Program, Stmt, Block, Decl, Assign, If, For, FuncDef, CallStmt,
     PrintStmt, ReadStmt, Return, ExprStmt,
-    Expr, BinOp, UnOp, Literal, Ident, IndexExpr, OpKind, TypeKind,
-    TypeSpec, BaseType, ArrayType
+    Expr, BinOp, UnOp, Literal, Ident, IndexExpr, CallExpr, OpKind, TypeKind,
+    TypeSpec, BaseType, ArrayType, Param
 )
 from parser.errors import ParseError
 
@@ -223,6 +223,24 @@ class Parser:
                            self.ts.peek(), "Assignment target must be identifier or indexed expression")
         return Assign(lvalue=lvalue, expr=expr)
 
+    def parse_param(self) -> Param:
+        """Parse a typed parameter: type IDENT"""
+        type_spec = self.parse_type()
+        name = self.ts.expect(K.IDENT, "Expected parameter name").lexeme
+        return Param(type_spec=type_spec, name=name)
+
+    def parse_param_list(self) -> List[Param]:
+        """Parse parameter list: (param (',' param)*)?"""
+        params: List[Param] = []
+        if self.ts.peek().kind == K.RPAREN:
+            return params
+        while True:
+            params.append(self.parse_param())
+            if self.ts.match(K.COMMA):
+                continue
+            break
+        return params
+
     def parse_funcdef(self) -> FuncDef:
         is_proc = False
         ret_type: Optional[TypeSpec] = None
@@ -230,17 +248,12 @@ class Parser:
             is_proc = True
         else:
             self.ts.expect(K.FUNC, "Expected 'func' or 'proc'")
-            # для v1 допустим упрощённую сигнатуру: func <type> name()
+            # func требует тип возвращаемого значения
             ret_type = self.parse_type()
 
         name = self.ts.expect(K.IDENT, "Expected function/procedure name").lexeme
         self.ts.expect(K.LPAREN, "Expected '(' after name")
-        params: List[str] = []
-        # v1: либо пусто, либо список идентификаторов без типов
-        if self.ts.peek().kind != K.RPAREN:
-            params.append(self.ts.expect(K.IDENT, "Expected parameter name").lexeme)
-            while self.ts.match(K.COMMA):
-                params.append(self.ts.expect(K.IDENT, "Expected parameter name").lexeme)
+        params = self.parse_param_list()
         self.ts.expect(K.RPAREN, "Expected ')' after parameters")
 
         body = self.parse_block()
@@ -392,18 +405,41 @@ class Parser:
             return UnOp(op=OpKind.NEG, expr=self.parse_unary())
         return self.parse_postfix()
 
+    def parse_arguments(self) -> List[Expr]:
+        """Parse argument list: (expr (',' expr)*)?"""
+        args: List[Expr] = []
+        if self.ts.peek().kind == K.RPAREN:
+            return args
+        while True:
+            args.append(self.parse_expr())
+            if self.ts.match(K.COMMA):
+                continue
+            break
+        return args
+
     def parse_postfix(self) -> Expr:
-        """Parse postfix expressions: primary ('[' expr ']')*"""
+        """Parse postfix expressions: primary ('(' args? ')' | '[' expr ']')*"""
         expr = self.parse_primary()
-        # Parse array indexing: [expr]*
-        while self.ts.match(K.LBRACKET):
-            if self.ts.peek().kind == K.RBRACKET:
-                # Empty index - error
-                raise ParseError(self.ts.last_ok_line, self.ts.last_ok_col, 
-                               self.ts.peek(), "Expected expression inside []")
-            index_expr = self.parse_expr()
-            self.ts.expect(K.RBRACKET, "Expected ']' after index expression")
-            expr = IndexExpr(base=expr, index=index_expr)
+        # Parse function calls and array indexing: ('(' args? ')' | '[' expr ']')*
+        while True:
+            # Function call: IDENT '(' args? ')'
+            if isinstance(expr, Ident) and self.ts.match(K.LPAREN):
+                args = self.parse_arguments()
+                self.ts.expect(K.RPAREN, "Expected ')' after arguments")
+                expr = CallExpr(callee=expr.name, args=args)
+                continue
+            # Array indexing: [expr]
+            elif self.ts.match(K.LBRACKET):
+                if self.ts.peek().kind == K.RBRACKET:
+                    # Empty index - error
+                    raise ParseError(self.ts.last_ok_line, self.ts.last_ok_col, 
+                                   self.ts.peek(), "Expected expression inside []")
+                index_expr = self.parse_expr()
+                self.ts.expect(K.RBRACKET, "Expected ']' after index expression")
+                expr = IndexExpr(base=expr, index=index_expr)
+                continue
+            else:
+                break
         return expr
 
     def parse_primary(self) -> Expr:

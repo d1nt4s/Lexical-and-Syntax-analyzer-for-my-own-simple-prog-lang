@@ -60,6 +60,8 @@ KEYWORDS = {
     "if": TokenKind.KW_IF,
     "else": TokenKind.KW_ELSE,
     "for": TokenKind.KW_FOR, # simplified for-loop in spec
+    "func": TokenKind.KW_FUNC,
+    "proc": TokenKind.KW_PROC,
     "return": TokenKind.KW_RETURN,
     "read": TokenKind.KW_READ,
     "print": TokenKind.KW_PRINT,

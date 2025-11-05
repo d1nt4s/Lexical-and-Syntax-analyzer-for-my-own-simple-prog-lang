@@ -1,0 +1,3 @@
+// params must be typed
+func int f(a, int b) { return b; }  // syntax error near 'a': expected type before param name
+

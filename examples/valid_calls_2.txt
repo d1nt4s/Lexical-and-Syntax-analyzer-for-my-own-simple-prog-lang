@@ -1,0 +1,8 @@
+// procedure and call as statement + arrays from step 1
+proc put(real x) {
+  print(x);
+}
+real[][] m;
+m[0][0] = 3.5;
+put(m[0][0]);
+

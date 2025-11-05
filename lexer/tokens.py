@@ -21,13 +21,8 @@ class TokenKind(Enum):
     KW_RETURN = auto()
     KW_READ = auto()
     KW_PRINT = auto()
-    KW_TRUE = auto()
-    KW_FALSE = auto()
     KW_FUNC = auto()
     KW_PROC = auto()
-    KW_RETURN = auto()
-    KW_READ = auto()
-    KW_PRINT = auto()
 
     # Delimiters
     SEMI = auto() # ;

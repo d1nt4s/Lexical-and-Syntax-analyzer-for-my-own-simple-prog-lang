@@ -13,8 +13,6 @@ class K:  # noqa: N801
     INT = TokenKind.KW_INT
     REAL = TokenKind.KW_REAL
     BOOL = TokenKind.KW_BOOL
-    TRUE = TokenKind.KW_TRUE
-    FALSE = TokenKind.KW_FALSE
     IF = TokenKind.KW_IF
     ELSE = TokenKind.KW_ELSE
     FOR = TokenKind.KW_FOR
@@ -128,7 +126,8 @@ class Parser:
         if tok.kind in (K.INT, K.REAL, K.BOOL):
             return self.parse_decl_stmt()
         # присваивание или вызов/expr;
-        if tok.kind in (K.IDENT, K.LPAREN, K.MINUS, K.NOT, K.INT_LIT, K.REAL_LIT, K.BOOL_LIT):
+        # Разрешаем начинать с унарных операторов, чтобы получить более точные сообщения об ошибках
+        if tok.kind in (K.IDENT, K.LPAREN, K.MINUS, K.NOT, K.PLUS, K.INT_LIT, K.REAL_LIT, K.BOOL_LIT):
             # попытка присваивания: IDENT '=' expr ';'
             if tok.kind == K.IDENT:
                 # заглянем на следующий токен — если '=', то это Assign
@@ -144,10 +143,6 @@ class Parser:
             # expression-statement (включая вызовы)
             expr = self.parse_expr()
             self.ts.expect(K.SEMI, "Expected ';' after expression")
-            # Отдельный CallStmt приятно иметь — вытащим простой случай 'IDENT(args)'
-            if isinstance(expr, Ident):
-                # одиночный идентификатор как stmt — считаем пустым вызовом name();
-                return CallStmt(name=expr.name, args=[])
             return ExprStmt(expr=expr)
 
         # ничего не подошло
@@ -372,7 +367,7 @@ class Parser:
             return Literal(value=tok.value)
         if self.ts.match(K.REAL_LIT):
             return Literal(value=tok.value)
-        if self.ts.match(K.BOOL_LIT) or self.ts.match(K.TRUE) or self.ts.match(K.FALSE):
+        if self.ts.match(K.BOOL_LIT):
             # в зависимости от вашего лексера true/false могут быть BOOL с value True/False
             val = tok.value if tok.value is not None else (tok.lexeme == "true")
             return Literal(value=val)

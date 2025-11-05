@@ -106,6 +106,16 @@ class CallExpr(Expr):
             s += a.pretty(indent + 1)
         return s
 
+@dataclass
+class FieldAccessExpr(Expr):
+    base: Expr = None
+    field: str = ""
+    def to_json(self) -> Dict[str, Any]:
+        return {"type": "FieldAccessExpr", "id": self.id, "base": self.base.to_json(), "field": self.field}
+    def pretty(self, indent: int = 0) -> str:
+        pad = "  " * indent
+        return f"{pad}FieldAccessExpr#{self.id}({self.field})\n" + self.base.pretty(indent + 1)
+
 # === Операторы и верхний уровень (Этап 4) ===
 
 class TypeKind(Enum):
@@ -148,8 +158,53 @@ class ArrayType(TypeSpec):
         pad = "  " * indent
         return f"{pad}ArrayType#{self.id}(dims={self.dims})\n" + self.base.pretty(indent + 1)
 
+@dataclass
+class NamedStructType(TypeSpec):
+    """Nominal struct type: struct Name"""
+    name: str = ""
+    def to_json(self) -> Dict[str, Any]:
+        return {"type": "NamedStructType", "id": self.id, "name": self.name}
+    def pretty(self, indent: int = 0) -> str:
+        pad = "  " * indent
+        return f"{pad}NamedStructType#{self.id}({self.name})\n"
+
 class Stmt(Node):
     pass
+
+@dataclass
+class FieldDecl(Node):
+    type_spec: TypeSpec = None
+    name: str = ""
+    def to_json(self) -> Dict[str, Any]:
+        return {"type": "FieldDecl", "id": self.id, "type_spec": self.type_spec.to_json(), "name": self.name}
+    def pretty(self, indent: int = 0) -> str:
+        pad = "  " * indent
+        type_str = self.type_spec.pretty(0).strip() if self.type_spec else "UNKNOWN"
+        return f"{pad}FieldDecl#{self.id}({type_str} {self.name})\n"
+
+@dataclass
+class EnumDecl(Stmt):
+    name: str = ""
+    members: List[str] = field(default_factory=list)
+    def to_json(self) -> Dict[str, Any]:
+        return {"type": "EnumDecl", "id": self.id, "name": self.name, "members": self.members}
+    def pretty(self, indent: int = 0) -> str:
+        pad = "  " * indent
+        members_str = ", ".join(self.members)
+        return f"{pad}EnumDecl#{self.id}({self.name} {{ {members_str} }})\n"
+
+@dataclass
+class StructDecl(Stmt):
+    name: str = ""
+    fields: List[FieldDecl] = field(default_factory=list)
+    def to_json(self) -> Dict[str, Any]:
+        return {"type": "StructDecl", "id": self.id, "name": self.name, "fields": [f.to_json() for f in self.fields]}
+    def pretty(self, indent: int = 0) -> str:
+        pad = "  " * indent
+        s = f"{pad}StructDecl#{self.id}({self.name})\n"
+        for f in self.fields:
+            s += f.pretty(indent + 1)
+        return s
 
 @dataclass
 class ExprStmt(Stmt):

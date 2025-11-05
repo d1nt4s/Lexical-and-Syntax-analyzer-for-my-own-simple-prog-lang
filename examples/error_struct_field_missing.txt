@@ -1,0 +1,5 @@
+// missing field after '.'
+struct A { int x; }
+struct A a;
+a. ;          // syntax error: expected field name after '.'
+

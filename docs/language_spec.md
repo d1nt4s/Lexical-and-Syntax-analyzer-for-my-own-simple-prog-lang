@@ -15,6 +15,7 @@ int real bool true false
 if else for
 func proc return
 read print
+enum struct
 ```
 
 ### 1.4 Literals
@@ -23,10 +24,11 @@ read print
 - **Boolean:** `true` | `false` → type `bool`
 
 ### 1.5 Delimiters and operators
-- **Delimiters:** `; , ( ) { } [ ]`
+- **Delimiters:** `; , ( ) { } [ ] .`
 - **Operators:** `+ - * /`, `== != < <= > >=`, `&& || !`, assignment `=`
 - Semicolon `;` terminates simple statements and declarations.  
   No trailing `;` after a closing `}` of a block.
+- Dot `.` is used for field access (e.g., `p.x`).
 
 ### 1.6 Token positions and lexer errors
 - Each token carries the start position `(line, column)` of its lexeme (1-based).
@@ -37,7 +39,7 @@ read print
 - **INT_LIT:** `[0-9]+`
 - **REAL_LIT:** `[0-9]+\.[0-9]+` (минимальная форма; допустимы улучшения)
 - **BOOL_LIT:** `true|false` (как ключевые слова)
-- **Punctuators:** `\[`, `\]`, `\(`, `\)`, `\{`, `\}`, `,`, `;`
+- **Punctuators:** `\[`, `\]`, `\(`, `\)`, `\{`, `\}`, `,`, `;`, `\.`
 - **Operators:** `\+`, `-`, `\*`, `/`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `\|\|`, `!`, `=`
 
 ---
@@ -52,17 +54,56 @@ int | real | bool
 ### 2.2 Array types
 - Arrays are denoted by `[]` suffixes after a base type.
 - Multidimensional arrays are formed by repeating `[]`.
-- Array types: `T[]`, `T[][]`, ... for any base `T ∈ {int, real, bool}`
+- Array types: `T[]`, `T[][]`, ... for any base `T ∈ {int, real, bool}` or struct type.
 
 Examples:
 ```
 int[] a;        // array of int
 real[][] m;     // 2D array of real
 bool[][][] b;   // 3D array of bool
+struct Point[] pts;  // array of struct
 ```
 
 - Indexing: `a[i]`, multidimensional indexing: `m[i][j]`
 - Array sizes are not specified in v1 (semantic/runtime checking is out of scope).
+
+### 2.3 Enum types
+- Enumeration declarations introduce named constants.
+- Syntax: `enum <Name> { <MemberList>? }`
+- `<MemberList> := IDENT (',' IDENT)*`
+- Enum members become named constants (lexically as `IDENT`, semantically as enum constants).
+
+Examples:
+```
+enum Color { Red, Green, Blue }
+enum Direction { North, South, East, West }
+enum Empty { }  // empty enum
+```
+
+### 2.4 Struct types (nominal types)
+- Structure declarations define named composite types.
+- Syntax: `struct <Name> { <FieldDecl>* }`
+- `<FieldDecl> := <type> IDENT ';'`
+- Type usage: `struct <Name>` (may be followed by array dimensions `[]*`).
+
+Examples:
+```
+struct Point {
+  int x;
+  int y;
+}
+
+struct Pixel {
+  int x;
+  int y;
+  int color;
+}
+
+// Usage in declarations
+struct Point p;
+struct Point[] points;
+struct Point[][] grid;
+```
 
 ---
 
@@ -73,15 +114,54 @@ bool[][][] b;   // 3D array of bool
 <type> <ident> [= <expr>] ;
 ```
 
+Types:
+- Base types: `int`, `real`, `bool`
+- Array types: `<base_type>[]*`
+- Struct types: `struct <Name>[]*`
+
 Examples:
 ```
 int x;
 real y = 1.5;
 bool flag = false;
 int[] data;
+struct Point p;
+struct Point[] points;
 ```
 
-### 3.2 Functions and procedures
+### 3.2 Enum declaration
+```
+enum <Name> { <MemberList>? }
+<MemberList> := IDENT (',' IDENT)*
+```
+
+Examples:
+```
+enum Color { Red, Green, Blue }
+enum Direction { North, South, East, West }
+```
+
+### 3.3 Struct declaration
+```
+struct <Name> { <FieldDecl>* }
+<FieldDecl> := <type> IDENT ';'
+```
+
+Examples:
+```
+struct Point {
+  int x;
+  int y;
+}
+
+struct Pixel {
+  int x;
+  int y;
+  int color;
+}
+```
+
+### 3.4 Functions and procedures
 - **Function:** returns a value:  
   `func <type> name(params) { ... }`
 - **Procedure:** returns no value:  
@@ -105,8 +185,12 @@ proc printTwice(int x) {
 
 ## 4. Statements
 
-1. Declaration (see §3.1)  
-2. Assignment: `<lvalue> = <expr> ;` where `<lvalue>` is an identifier or array index `a[i]` / `m[i][j]`.  
+1. Declaration (see §3.1, §3.2, §3.3)  
+2. Assignment: `<lvalue> = <expr> ;` where `<lvalue>` is:
+   - An identifier: `x`
+   - An array index: `a[i]`, `m[i][j]`
+   - A field access: `p.x`, `arr[i].field`
+   - Combinations: `arr[i].field[j]`
 3. Call: `<ident>(arglist?) ;` (e.g. `print(x);`, `read(x);`)  
 4. Block: `{ <stmt>* }`  
 5. Conditional:
@@ -142,11 +226,11 @@ print(x);   // print the value of expression x
 
 ### 5.1 Grammar (simplified)
 ```
-type       ::= base_type ('[' ']')*
+type       ::= base_type ('[' ']')* | 'struct' IDENT ('[' ']')*
 base_type  ::= 'int' | 'real' | 'bool'
 
 primary    ::= INT | REAL | TRUE | FALSE | IDENT | '(' expr ')'
-postfix    ::= primary ('(' args? ')' | '[' expr ']')*
+postfix    ::= primary ('(' args? ')' | '[' expr ']' | '.' IDENT)*
 unary      ::= ('!' | '+' | '-') unary | postfix
 mul        ::= unary (('*' | '/') unary)*
 add        ::= mul   (('+' | '-') mul)*
@@ -155,7 +239,7 @@ eq         ::= rel   (('==' | '!=') rel)?
 land       ::= eq    ('&&' eq)*
 lor        ::= land  ('||' land)*
 assign     ::= lval '=' assign | lor
-lval       ::= IDENT | postfix  // where postfix may be IndexExpr
+lval       ::= IDENT | postfix  // where postfix may be IndexExpr or FieldAccessExpr
 expr       ::= assign
 args       ::= expr (',' expr)*
 ```
@@ -164,7 +248,7 @@ args       ::= expr (',' expr)*
 
 | Level | Operators             | Associativity |
 |:------|:----------------------|:--------------|
-| 9     | call `()` index `[]`  | left          |
+| 9     | call `()` index `[]` field `.` | left          |
 | 8     | unary `! + -`         | right         |
 | 7     | `* /`                 | left          |
 | 6     | `+ -`                 | left          |
@@ -175,14 +259,22 @@ args       ::= expr (',' expr)*
 | 1     | `=` (assignment)      | **right**     |
 
 Notes:
-- Indexing `[]` and call `()` are postfix with the highest precedence.
+- Postfix operators `()`, `[]`, and `.` have the highest precedence and are left-associative.
+- Field access `.` can be chained: `a.b.c` parses as `(a.b).c`.
+- Field access can be combined with indexing: `arr[i].field` parses as `(arr[i]).field`.
 - Assignment is right-associative: `a = b = 1;` parses as `a = (b = 1);`.
 
 ---
 
 ## 6. Statement grammar (EBNF-like)
 ```
-program    ::= (decl | func | proc | stmt)*
+program    ::= (enum_decl | struct_decl | decl | func | proc | stmt)*
+
+enum_decl  ::= 'enum' IDENT '{' member_list? '}'
+member_list ::= IDENT (',' IDENT)*
+
+struct_decl ::= 'struct' IDENT '{' field_decl* '}'
+field_decl  ::= type IDENT ';'
 
 decl       ::= type IDENT ('=' expr)? ';'
 

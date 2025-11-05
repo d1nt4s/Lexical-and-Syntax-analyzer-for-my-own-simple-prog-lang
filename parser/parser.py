@@ -4,8 +4,9 @@ from lexer.tokens import Token, TokenKind
 from parser.ast import (
     Program, Stmt, Block, Decl, Assign, If, For, FuncDef, CallStmt,
     PrintStmt, ReadStmt, Return, ExprStmt,
-    Expr, BinOp, UnOp, Literal, Ident, IndexExpr, CallExpr, OpKind, TypeKind,
-    TypeSpec, BaseType, ArrayType, Param
+    Expr, BinOp, UnOp, Literal, Ident, IndexExpr, CallExpr, FieldAccessExpr, OpKind, TypeKind,
+    TypeSpec, BaseType, ArrayType, NamedStructType, Param,
+    EnumDecl, StructDecl, FieldDecl
 )
 from parser.errors import ParseError
 
@@ -33,9 +34,12 @@ class K:  # noqa: N801
     RBRACE = TokenKind.RBRACE
     LBRACKET = TokenKind.LBRACKET
     RBRACKET = TokenKind.RBRACKET
+    DOT = TokenKind.DOT
     COMMA = TokenKind.COMMA
     SEMI = TokenKind.SEMI
     EOF = TokenKind.EOF
+    ENUM = TokenKind.KW_ENUM
+    STRUCT = TokenKind.KW_STRUCT
     # операторы для выражений/унараных уже поддерживаются Этапом 3:
     PLUS = TokenKind.PLUS
     MINUS = TokenKind.MINUS
@@ -108,6 +112,16 @@ class Parser:
         # блок
         if tok.kind == K.LBRACE:
             return self.parse_block()
+        # enum
+        if tok.kind == K.ENUM:
+            return self.parse_enum_decl()
+        # struct
+        if tok.kind == K.STRUCT:
+            # Проверяем, что это объявление struct, а не тип struct Name
+            # Если следующий токен IDENT, а затем LBRACE - это объявление
+            if self.ts.i + 1 < len(self.ts.toks) and self.ts.toks[self.ts.i + 1].kind == K.IDENT:
+                if self.ts.i + 2 < len(self.ts.toks) and self.ts.toks[self.ts.i + 2].kind == K.LBRACE:
+                    return self.parse_struct_decl()
         # if
         if tok.kind == K.IF:
             return self.parse_if()
@@ -125,8 +139,8 @@ class Parser:
             return self.parse_read()
         if tok.kind == K.PRINT:
             return self.parse_print()
-        # объявления типов
-        if tok.kind in (K.INT, K.REAL, K.BOOL):
+        # объявления типов (int, real, bool, struct Name)
+        if tok.kind in (K.INT, K.REAL, K.BOOL) or (tok.kind == K.STRUCT):
             return self.parse_decl_stmt()
         # присваивание или вызов/expr;
         # Присваивание может начинаться только с IDENT или LPAREN (для индексирования)
@@ -139,9 +153,9 @@ class Parser:
             if self.ts.match(K.ASSIGN):
                 expr = self.parse_expr()
                 self.ts.expect(K.SEMI, "Expected ';' after assignment")
-                if not isinstance(lvalue, (Ident, IndexExpr)):
+                if not isinstance(lvalue, (Ident, IndexExpr, FieldAccessExpr)):
                     raise ParseError(self.ts.last_ok_line, self.ts.last_ok_col, 
-                                   self.ts.peek(), "Assignment target must be identifier or indexed expression")
+                                   self.ts.peek(), "Assignment target must be identifier, indexed expression, or field access")
                 return Assign(lvalue=lvalue, expr=expr)
             # Не присваивание - откатываемся и парсим как выражение
             self.ts.i = save_i
@@ -209,18 +223,18 @@ class Parser:
         lvalue = self.parse_postfix()
         self.ts.expect(K.ASSIGN, "Expected '=' in for-init")
         expr = self.parse_expr()
-        if not isinstance(lvalue, (Ident, IndexExpr)):
+        if not isinstance(lvalue, (Ident, IndexExpr, FieldAccessExpr)):
             raise ParseError(self.ts.last_ok_line, self.ts.last_ok_col, 
-                           self.ts.peek(), "Assignment target must be identifier or indexed expression")
+                           self.ts.peek(), "Assignment target must be identifier, indexed expression, or field access")
         return Assign(lvalue=lvalue, expr=expr)
 
     def parse_for_step(self) -> Assign:
         lvalue = self.parse_postfix()
         self.ts.expect(K.ASSIGN, "Expected '=' in for-step")
         expr = self.parse_expr()
-        if not isinstance(lvalue, (Ident, IndexExpr)):
+        if not isinstance(lvalue, (Ident, IndexExpr, FieldAccessExpr)):
             raise ParseError(self.ts.last_ok_line, self.ts.last_ok_col, 
-                           self.ts.peek(), "Assignment target must be identifier or indexed expression")
+                           self.ts.peek(), "Assignment target must be identifier, indexed expression, or field access")
         return Assign(lvalue=lvalue, expr=expr)
 
     def parse_param(self) -> Param:
@@ -258,6 +272,42 @@ class Parser:
 
         body = self.parse_block()
         return FuncDef(name=name, is_proc=is_proc, ret_type=ret_type, body=body, params=params)
+
+    def parse_enum_decl(self) -> EnumDecl:
+        """Parse enum declaration: enum Name { A, B, C }"""
+        self.ts.expect(K.ENUM, "Expected 'enum'")
+        name = self.ts.expect(K.IDENT, "Expected enum name").lexeme
+        self.ts.expect(K.LBRACE, "Expected '{' after enum name")
+        members: List[str] = []
+        if self.ts.peek().kind != K.RBRACE:
+            while True:
+                member_tok = self.ts.expect(K.IDENT, "Expected enum member name")
+                members.append(member_tok.lexeme)
+                if self.ts.match(K.COMMA):
+                    # Проверяем, не является ли следующая лексема закрывающей скобкой
+                    if self.ts.peek().kind == K.RBRACE:
+                        raise ParseError(self.ts.last_ok_line, self.ts.last_ok_col,
+                                       self.ts.peek(), "Expected enum member name")
+                    continue
+                break
+        self.ts.expect(K.RBRACE, "Expected '}' after enum members")
+        return EnumDecl(name=name, members=members)
+
+    def parse_struct_decl(self) -> StructDecl:
+        """Parse struct declaration: struct Name { type field; ... }"""
+        self.ts.expect(K.STRUCT, "Expected 'struct'")
+        name = self.ts.expect(K.IDENT, "Expected struct name").lexeme
+        self.ts.expect(K.LBRACE, "Expected '{' after struct name")
+        fields: List[FieldDecl] = []
+        while self.ts.peek().kind != K.RBRACE:
+            if self.ts.match(K.SEMI):  # пропустим пустые строки
+                continue
+            field_type = self.parse_type()
+            field_name = self.ts.expect(K.IDENT, "Expected field name").lexeme
+            self.ts.expect(K.SEMI, "Expected ';' after field declaration")
+            fields.append(FieldDecl(type_spec=field_type, name=field_name))
+        self.ts.expect(K.RBRACE, "Expected '}' after struct body")
+        return StructDecl(name=name, fields=fields)
 
     def parse_return(self) -> Return:
         self.ts.expect(K.RETURN, "Expected 'return'")
@@ -298,7 +348,7 @@ class Parser:
         return Decl(type_spec=type_spec, name=name, init=init)
 
     def parse_type(self) -> TypeSpec:
-        # Parse base type
+        # Parse base type or struct name
         base: TypeSpec
         if self.ts.match(K.INT):
             base = BaseType(kind=TypeKind.INT)
@@ -306,9 +356,13 @@ class Parser:
             base = BaseType(kind=TypeKind.REAL)
         elif self.ts.match(K.BOOL):
             base = BaseType(kind=TypeKind.BOOL)
+        elif self.ts.match(K.STRUCT):
+            # struct Name
+            name = self.ts.expect(K.IDENT, "Expected struct name after 'struct'").lexeme
+            base = NamedStructType(name=name)
         else:
             tok = self.ts.peek()
-            raise ParseError(self.ts.last_ok_line, self.ts.last_ok_col, tok, "Expected type (int|real|bool)")
+            raise ParseError(self.ts.last_ok_line, self.ts.last_ok_col, tok, "Expected type (int|real|bool|struct Name)")
         
         # Parse array dimensions: []*
         dims = 0
@@ -418,9 +472,9 @@ class Parser:
         return args
 
     def parse_postfix(self) -> Expr:
-        """Parse postfix expressions: primary ('(' args? ')' | '[' expr ']')*"""
+        """Parse postfix expressions: primary ('(' args? ')' | '[' expr ']' | '.' IDENT)*"""
         expr = self.parse_primary()
-        # Parse function calls and array indexing: ('(' args? ')' | '[' expr ']')*
+        # Parse function calls, array indexing, and field access: ('(' args? ')' | '[' expr ']' | '.' IDENT)*
         while True:
             # Function call: IDENT '(' args? ')'
             if isinstance(expr, Ident) and self.ts.match(K.LPAREN):
@@ -437,6 +491,11 @@ class Parser:
                 index_expr = self.parse_expr()
                 self.ts.expect(K.RBRACKET, "Expected ']' after index expression")
                 expr = IndexExpr(base=expr, index=index_expr)
+                continue
+            # Field access: .IDENT
+            elif self.ts.match(K.DOT):
+                field_name = self.ts.expect(K.IDENT, "Expected field name after '.'").lexeme
+                expr = FieldAccessExpr(base=expr, field=field_name)
                 continue
             else:
                 break

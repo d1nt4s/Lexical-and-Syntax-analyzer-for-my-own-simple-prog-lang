@@ -1,0 +1,8 @@
+// mixing call/index/field
+func int inc(int a) { return a + 1; }
+struct Box { int v; }
+struct Box[] bs;
+bs[0].v = 5;
+bs[0].v = inc(bs[0].v);
+print(bs[0].v);
+

@@ -1,0 +1,17 @@
+// enum + struct basics
+enum Color { Red, Green, Blue }
+
+struct Pixel {
+  int x;
+  int y;
+  int color; // pretend: stores enum as int for now
+}
+
+struct Pixel p;
+p.x = 3;
+p.y = 4;
+p.color = 1; // Green, conceptually
+print(p.x);
+print(p.y);
+print(p.color);
+

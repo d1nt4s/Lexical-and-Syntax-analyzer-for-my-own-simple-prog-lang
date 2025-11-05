@@ -23,6 +23,8 @@ class TokenKind(Enum):
     KW_PRINT = auto()
     KW_FUNC = auto()
     KW_PROC = auto()
+    KW_ENUM = auto()
+    KW_STRUCT = auto()
 
     # Delimiters
     SEMI = auto() # ;
@@ -33,6 +35,7 @@ class TokenKind(Enum):
     RBRACE = auto() # }
     LBRACKET = auto() # [
     RBRACKET = auto() # ]
+    DOT = auto() # .
 
     # Operators
     PLUS = auto() # +
@@ -65,6 +68,8 @@ KEYWORDS = {
     "return": TokenKind.KW_RETURN,
     "read": TokenKind.KW_READ,
     "print": TokenKind.KW_PRINT,
+    "enum": TokenKind.KW_ENUM,
+    "struct": TokenKind.KW_STRUCT,
     "true": TokenKind.BOOL,
     "false": TokenKind.BOOL,
 }

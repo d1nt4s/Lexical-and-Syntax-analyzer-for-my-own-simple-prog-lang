@@ -1,0 +1,7 @@
+// arrays of struct + field/index chain
+struct Point { int x; int y; }
+struct Point[] pts;
+int i; i = 0;
+pts[i].x = 42;
+print(pts[i].x);
+

@@ -13,3 +13,6 @@ python -m main.main examples/valid01_basics.txt
 
 # JSON AST:
 python -m main.main examples/valid01_basics.txt --json
+
+# Running all examples
+python scripts/run_all_examples.py

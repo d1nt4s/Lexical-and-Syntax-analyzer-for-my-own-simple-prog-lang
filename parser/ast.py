@@ -83,12 +83,46 @@ class Ident(Expr):
         pad = "  " * indent
         return f"{pad}Ident#{self.id}({self.name})\n"
 
+@dataclass
+class IndexExpr(Expr):
+    base: Expr = None
+    index: Expr = None
+    def to_json(self) -> Dict[str, Any]:
+        return {"type": "IndexExpr", "id": self.id, "base": self.base.to_json(), "index": self.index.to_json()}
+    def pretty(self, indent: int = 0) -> str:
+        pad = "  " * indent
+        return f"{pad}IndexExpr#{self.id}\n" + self.base.pretty(indent + 1) + self.index.pretty(indent + 1)
+
 # === Операторы и верхний уровень (Этап 4) ===
 
 class TypeKind(Enum):
     INT = auto()
     REAL = auto()
     BOOL = auto()
+
+# --- Type specifications ---
+class TypeSpec(Node):
+    """Base class for type specifications."""
+    pass
+
+@dataclass
+class BaseType(TypeSpec):
+    kind: TypeKind = TypeKind.INT
+    def to_json(self) -> Dict[str, Any]:
+        return {"type": "BaseType", "id": self.id, "kind": self.kind.name}
+    def pretty(self, indent: int = 0) -> str:
+        pad = "  " * indent
+        return f"{pad}BaseType#{self.id}({self.kind.name})\n"
+
+@dataclass
+class ArrayType(TypeSpec):
+    base: TypeSpec = None
+    dims: int = 1
+    def to_json(self) -> Dict[str, Any]:
+        return {"type": "ArrayType", "id": self.id, "base": self.base.to_json(), "dims": self.dims}
+    def pretty(self, indent: int = 0) -> str:
+        pad = "  " * indent
+        return f"{pad}ArrayType#{self.id}(dims={self.dims})\n" + self.base.pretty(indent + 1)
 
 class Stmt(Node):
     pass
@@ -115,28 +149,48 @@ class Block(Stmt):
 
 @dataclass
 class Decl(Stmt):
-    type: TypeKind = TypeKind.INT
+    type_spec: TypeSpec = None
     name: str = ""
     init: Optional[Expr] = None
+    @property
+    def type(self) -> TypeKind:
+        """Обратная совместимость: возвращает TypeKind из type_spec"""
+        if isinstance(self.type_spec, BaseType):
+            return self.type_spec.kind
+        elif isinstance(self.type_spec, ArrayType):
+            # Для массивов возвращаем базовый тип
+            base = self.type_spec.base
+            while isinstance(base, ArrayType):
+                base = base.base
+            if isinstance(base, BaseType):
+                return base.kind
+        return TypeKind.INT  # fallback
     def to_json(self) -> Dict[str, Any]:
-        obj = {"type": "Decl", "id": self.id, "decl_type": self.type.name, "name": self.name}
+        obj = {"type": "Decl", "id": self.id, "type_spec": self.type_spec.to_json(), "name": self.name}
         if self.init is not None: obj["init"] = self.init.to_json()
         return obj
     def pretty(self, indent: int = 0) -> str:
         pad = "  " * indent
-        s = f"{pad}Decl#{self.id}({self.type.name} {self.name})\n"
+        type_str = self.type_spec.pretty(0).strip() if self.type_spec else "UNKNOWN"
+        s = f"{pad}Decl#{self.id}({type_str} {self.name})\n"
         if self.init: s += self.init.pretty(indent + 1)
         return s
 
 @dataclass
 class Assign(Stmt):
-    name: str = ""
+    lvalue: Expr = None  # Ident or IndexExpr
     expr: Expr = None
+    @property
+    def name(self) -> str:
+        """Обратная совместимость: возвращает имя из lvalue если это Ident"""
+        if isinstance(self.lvalue, Ident):
+            return self.lvalue.name
+        return ""
     def to_json(self) -> Dict[str, Any]:
-        return {"type": "Assign", "id": self.id, "name": self.name, "expr": self.expr.to_json()}
+        return {"type": "Assign", "id": self.id, "lvalue": self.lvalue.to_json(), "expr": self.expr.to_json()}
     def pretty(self, indent: int = 0) -> str:
         pad = "  " * indent
-        return f"{pad}Assign#{self.id}({self.name})\n" + self.expr.pretty(indent + 1)
+        return f"{pad}Assign#{self.id}\n" + self.lvalue.pretty(indent + 1) + self.expr.pretty(indent + 1)
 
 @dataclass
 class If(Stmt):
@@ -213,7 +267,7 @@ class FuncDef(Stmt):
     # для v1 параметры опционально пустые; функции могут возвращать значение (func) или быть процедурами (proc)
     name: str = ""
     is_proc: bool = True
-    ret_type: Optional[TypeKind] = None    # только если is_proc == False
+    ret_type: Optional[TypeSpec] = None    # только если is_proc == False
     body: Block = None
     params: List[str] = field(default_factory=list)  # упрощённо: только имена
     def to_json(self) -> Dict[str, Any]:
@@ -222,11 +276,15 @@ class FuncDef(Stmt):
                "params": self.params,
                "body": self.body.to_json()}
         if not self.is_proc and self.ret_type is not None:
-            obj["ret_type"] = self.ret_type.name
+            obj["ret_type"] = self.ret_type.to_json()
         return obj
     def pretty(self, indent: int = 0) -> str:
         pad = "  " * indent
-        kind = "proc" if self.is_proc else f"func:{self.ret_type.name if self.ret_type else 'UNKNOWN'}"
+        if self.is_proc:
+            kind = "proc"
+        else:
+            type_str = self.ret_type.pretty(0).strip() if self.ret_type else "UNKNOWN"
+            kind = f"func:{type_str}"
         s = f"{pad}FuncDef#{self.id}({kind} {self.name})\n"
         for p in self.params:
             s += f"{pad}  param({p})\n"

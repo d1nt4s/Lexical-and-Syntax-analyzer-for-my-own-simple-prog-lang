@@ -1,0 +1,4 @@
+// Empty index
+int[] a;
+a[] = 5;    // <- syntax error: expected expression inside []
+

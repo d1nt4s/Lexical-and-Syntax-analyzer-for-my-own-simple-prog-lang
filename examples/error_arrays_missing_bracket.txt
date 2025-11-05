@@ -1,0 +1,4 @@
+// Missing closing bracket
+int[] a;
+a[0 = 1;    // <- syntax error: expected ']' after index expression
+

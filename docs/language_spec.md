@@ -32,6 +32,14 @@ read print
 - Each token carries the start position `(line, column)` of its lexeme (1-based).
 - Unknown or invalid characters must raise a lexical error with position and message.
 
+### 1.7 Lexeme categories (regex summary)
+- **IDENT:** `[A-Za-z_][A-Za-z0-9_]*`
+- **INT_LIT:** `[0-9]+`
+- **REAL_LIT:** `[0-9]+\.[0-9]+` (минимальная форма; допустимы улучшения)
+- **BOOL_LIT:** `true|false` (как ключевые слова)
+- **Punctuators:** `\[`, `\]`, `\(`, `\)`, `\{`, `\}`, `,`, `;`
+- **Operators:** `\+`, `-`, `\*`, `/`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `\|\|`, `!`, `=`
+
 ---
 
 ## 2. Types
@@ -41,14 +49,16 @@ read print
 int | real | bool
 ```
 
-### 2.2 Arrays
+### 2.2 Array types
 - Arrays are denoted by `[]` suffixes after a base type.
 - Multidimensional arrays are formed by repeating `[]`.
+- Array types: `T[]`, `T[][]`, ... for any base `T ∈ {int, real, bool}`
 
 Examples:
 ```
 int[] a;        // array of int
 real[][] m;     // 2D array of real
+bool[][][] b;   // 3D array of bool
 ```
 
 - Indexing: `a[i]`, multidimensional indexing: `m[i][j]`
@@ -131,19 +141,22 @@ print(x);   // print the value of expression x
 
 ### 5.1 Grammar (simplified)
 ```
-primary  ::= INT | REAL | TRUE | FALSE | IDENT | IDENT '(' args? ')' | '(' expr ')'
-index    ::= primary ('[' expr ']')*
-unary    ::= ('!' | '+' | '-') unary | index
-mul      ::= unary (('*' | '/') unary)*
-add      ::= mul   (('+' | '-') mul)*
-rel      ::= add   (('<' | '<=' | '>' | '>=') add)?
-eq       ::= rel   (('==' | '!=') rel)?
-land     ::= eq    ('&&' eq)*
-lor      ::= land  ('||' land)*
-assign   ::= lval '=' assign | lor
-lval     ::= IDENT | index
-expr     ::= assign
-args     ::= expr (',' expr)*
+type       ::= base_type ('[' ']')*
+base_type  ::= 'int' | 'real' | 'bool'
+
+primary    ::= INT | REAL | TRUE | FALSE | IDENT | IDENT '(' args? ')' | '(' expr ')'
+postfix    ::= primary ('[' expr ']')*
+unary      ::= ('!' | '+' | '-') unary | postfix
+mul        ::= unary (('*' | '/') unary)*
+add        ::= mul   (('+' | '-') mul)*
+rel        ::= add   (('<' | '<=' | '>' | '>=') add)?
+eq         ::= rel   (('==' | '!=') rel)?
+land       ::= eq    ('&&' eq)*
+lor        ::= land  ('||' land)*
+assign     ::= lval '=' assign | lor
+lval       ::= IDENT | postfix  // where postfix may be IndexExpr
+expr       ::= assign
+args       ::= expr (',' expr)*
 ```
 
 ### 5.2 Operator precedence and associativity

@@ -1,0 +1,7 @@
+// 1D array: write/read
+int[] a;
+a[0] = 42;
+int x;
+x = a[0];
+print(x);
+

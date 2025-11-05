@@ -4,7 +4,8 @@ from lexer.tokens import Token, TokenKind
 from parser.ast import (
     Program, Stmt, Block, Decl, Assign, If, For, FuncDef, CallStmt,
     PrintStmt, ReadStmt, Return, ExprStmt,
-    Expr, BinOp, UnOp, Literal, Ident, OpKind, TypeKind
+    Expr, BinOp, UnOp, Literal, Ident, IndexExpr, OpKind, TypeKind,
+    TypeSpec, BaseType, ArrayType
 )
 from parser.errors import ParseError
 
@@ -30,6 +31,8 @@ class K:  # noqa: N801
     RPAREN = TokenKind.RPAREN
     LBRACE = TokenKind.LBRACE
     RBRACE = TokenKind.RBRACE
+    LBRACKET = TokenKind.LBRACKET
+    RBRACKET = TokenKind.RBRACKET
     COMMA = TokenKind.COMMA
     SEMI = TokenKind.SEMI
     EOF = TokenKind.EOF
@@ -126,21 +129,27 @@ class Parser:
         if tok.kind in (K.INT, K.REAL, K.BOOL):
             return self.parse_decl_stmt()
         # присваивание или вызов/expr;
-        # Разрешаем начинать с унарных операторов, чтобы получить более точные сообщения об ошибках
-        if tok.kind in (K.IDENT, K.LPAREN, K.MINUS, K.NOT, K.PLUS, K.INT_LIT, K.REAL_LIT, K.BOOL_LIT):
-            # попытка присваивания: IDENT '=' expr ';'
-            if tok.kind == K.IDENT:
-                # заглянем на следующий токен — если '=', то это Assign
-                name_tok = self.ts.advance()
-                if self.ts.match(K.ASSIGN):
-                    expr = self.parse_expr()
-                    self.ts.expect(K.SEMI, "Expected ';' after assignment")
-                    return Assign(name=name_tok.lexeme, expr=expr)
-                # иначе откатываться не будем — будем считать это началом выражения/вызова
-                # восстановим позицию на IDENT для parse_expr: просто создадим искусственный Ident из уже съеденного
-                # проще: вернёмся на шаг
-                self.ts.i -= 1  # безопасно, мы знаем что i>0
-            # expression-statement (включая вызовы)
+        # Присваивание может начинаться только с IDENT или LPAREN (для индексирования)
+        # Для остальных сразу парсим как выражение
+        if tok.kind == K.IDENT or tok.kind == K.LPAREN:
+            # Попытка присваивания: lvalue (Ident или IndexExpr) '=' expr ';'
+            # Сохраняем позицию для отката, если это не присваивание
+            save_i = self.ts.i
+            lvalue = self.parse_postfix()  # может быть Ident или IndexExpr
+            if self.ts.match(K.ASSIGN):
+                expr = self.parse_expr()
+                self.ts.expect(K.SEMI, "Expected ';' after assignment")
+                if not isinstance(lvalue, (Ident, IndexExpr)):
+                    raise ParseError(self.ts.last_ok_line, self.ts.last_ok_col, 
+                                   self.ts.peek(), "Assignment target must be identifier or indexed expression")
+                return Assign(lvalue=lvalue, expr=expr)
+            # Не присваивание - откатываемся и парсим как выражение
+            self.ts.i = save_i
+            expr = self.parse_expr()
+            self.ts.expect(K.SEMI, "Expected ';' after expression")
+            return ExprStmt(expr=expr)
+        # Обычные выражения (литералы, унарные операторы и т.д.)
+        if tok.kind in (K.MINUS, K.NOT, K.PLUS, K.INT_LIT, K.REAL_LIT, K.BOOL_LIT):
             expr = self.parse_expr()
             self.ts.expect(K.SEMI, "Expected ';' after expression")
             return ExprStmt(expr=expr)
@@ -196,21 +205,27 @@ class Parser:
         if self.ts.peek().kind in (K.INT, K.REAL, K.BOOL):
             decl = self.parse_decl_core()
             return decl
-        # попробуем присваивание IDENT '=' expr
-        name = self.ts.expect(K.IDENT, "Expected identifier in for-init").lexeme
+        # попробуем присваивание lvalue '=' expr
+        lvalue = self.parse_postfix()
         self.ts.expect(K.ASSIGN, "Expected '=' in for-init")
         expr = self.parse_expr()
-        return Assign(name=name, expr=expr)
+        if not isinstance(lvalue, (Ident, IndexExpr)):
+            raise ParseError(self.ts.last_ok_line, self.ts.last_ok_col, 
+                           self.ts.peek(), "Assignment target must be identifier or indexed expression")
+        return Assign(lvalue=lvalue, expr=expr)
 
     def parse_for_step(self) -> Assign:
-        name = self.ts.expect(K.IDENT, "Expected identifier in for-step").lexeme
+        lvalue = self.parse_postfix()
         self.ts.expect(K.ASSIGN, "Expected '=' in for-step")
         expr = self.parse_expr()
-        return Assign(name=name, expr=expr)
+        if not isinstance(lvalue, (Ident, IndexExpr)):
+            raise ParseError(self.ts.last_ok_line, self.ts.last_ok_col, 
+                           self.ts.peek(), "Assignment target must be identifier or indexed expression")
+        return Assign(lvalue=lvalue, expr=expr)
 
     def parse_funcdef(self) -> FuncDef:
         is_proc = False
-        ret_type: Optional[TypeKind] = None
+        ret_type: Optional[TypeSpec] = None
         if self.ts.match(K.PROC):
             is_proc = True
         else:
@@ -262,19 +277,36 @@ class Parser:
         return decl
 
     def parse_decl_core(self) -> Decl:
-        ty = self.parse_type()
+        type_spec = self.parse_type()
         name = self.ts.expect(K.IDENT, "Expected variable name").lexeme
         init: Optional[Expr] = None
         if self.ts.match(K.ASSIGN):
             init = self.parse_expr()
-        return Decl(type=ty, name=name, init=init)
+        return Decl(type_spec=type_spec, name=name, init=init)
 
-    def parse_type(self) -> TypeKind:
-        if self.ts.match(K.INT): return TypeKind.INT
-        if self.ts.match(K.REAL): return TypeKind.REAL
-        if self.ts.match(K.BOOL): return TypeKind.BOOL
-        tok = self.ts.peek()
-        raise ParseError(self.ts.last_ok_line, self.ts.last_ok_col, tok, "Expected type (int|real|bool)")
+    def parse_type(self) -> TypeSpec:
+        # Parse base type
+        base: TypeSpec
+        if self.ts.match(K.INT):
+            base = BaseType(kind=TypeKind.INT)
+        elif self.ts.match(K.REAL):
+            base = BaseType(kind=TypeKind.REAL)
+        elif self.ts.match(K.BOOL):
+            base = BaseType(kind=TypeKind.BOOL)
+        else:
+            tok = self.ts.peek()
+            raise ParseError(self.ts.last_ok_line, self.ts.last_ok_col, tok, "Expected type (int|real|bool)")
+        
+        # Parse array dimensions: []*
+        dims = 0
+        while self.ts.peek().kind == K.LBRACKET:
+            self.ts.expect(K.LBRACKET, "Expected '['")
+            self.ts.expect(K.RBRACKET, "Expected ']' after '['")
+            dims += 1
+        
+        if dims > 0:
+            return ArrayType(base=base, dims=dims)
+        return base
 
     # === НИЖЕ — КАСКАД ВЫРАЖЕНИЙ Этапа 3. Оставьте как есть в вашем проекте ===
     # Если у вас это в отдельном классе — просто импортируйте. Ниже — минимальная заготовка,
@@ -358,7 +390,21 @@ class Parser:
             return UnOp(op=OpKind.NOT, expr=self.parse_unary())
         if self.ts.match(K.MINUS):
             return UnOp(op=OpKind.NEG, expr=self.parse_unary())
-        return self.parse_primary()
+        return self.parse_postfix()
+
+    def parse_postfix(self) -> Expr:
+        """Parse postfix expressions: primary ('[' expr ']')*"""
+        expr = self.parse_primary()
+        # Parse array indexing: [expr]*
+        while self.ts.match(K.LBRACKET):
+            if self.ts.peek().kind == K.RBRACKET:
+                # Empty index - error
+                raise ParseError(self.ts.last_ok_line, self.ts.last_ok_col, 
+                               self.ts.peek(), "Expected expression inside []")
+            index_expr = self.parse_expr()
+            self.ts.expect(K.RBRACKET, "Expected ']' after index expression")
+            expr = IndexExpr(base=expr, index=index_expr)
+        return expr
 
     def parse_primary(self) -> Expr:
         tok = self.ts.peek()

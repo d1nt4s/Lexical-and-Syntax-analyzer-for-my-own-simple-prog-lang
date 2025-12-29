@@ -32,10 +32,21 @@ def _next_id() -> int:
 @dataclass
 class Node:
     id: int = field(default_factory=_next_id, init=False)
+    span: Optional[SourceSpan] = None
     def to_json(self) -> Dict[str, Any]:
         raise NotImplementedError
     def pretty(self, indent: int = 0) -> str:
         raise NotImplementedError
+
+@dataclass(frozen=True)
+class SourcePos:
+    line: int
+    col: int
+
+@dataclass(frozen=True)
+class SourceSpan:
+    start: SourcePos
+    end: SourcePos
 
 # --- Exprs ---
 class Expr(Node):

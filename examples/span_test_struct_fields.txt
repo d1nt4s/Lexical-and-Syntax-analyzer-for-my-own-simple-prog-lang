@@ -1,0 +1,16 @@
+// Пример для проверки spans полей struct
+struct Person {
+    int age;
+    real height;
+    bool active;
+}
+
+struct Person person;
+person.age = 25;
+person.height = 1.75;
+person.active = true;
+
+print(person.age);
+print(person.height);
+print(person.active);
+

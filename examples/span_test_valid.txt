@@ -1,0 +1,38 @@
+// Простой валидный пример для проверки spans
+int x = 10;
+real y = 3.14;
+bool flag = true;
+
+struct Point {
+    int x;
+    int y;
+}
+
+struct Point p;
+p.x = 5;
+p.y = 10;
+
+enum Color { Red, Green, Blue }
+
+func int add(int a, int b) {
+    return a + b;
+}
+
+proc printSum(int x, int y) {
+    print(x + y);
+}
+
+if (x > 5) {
+    print(x);
+} else {
+    print(y);
+}
+
+for (int i = 0; i < 10; i = i + 1) {
+    print(i);
+}
+
+return x;
+read(y);
+print(x + y);
+

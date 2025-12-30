@@ -1,0 +1,22 @@
+// Пример для проверки spans функций и процедур
+func int multiply(int a, int b) {
+    return a * b;
+}
+
+proc greet() {
+    print(1);
+    print(2);
+    print(3);
+}
+
+func real divide(real x, real y) {
+    if (y != 0.0) {
+        return x / y;
+    }
+    return 0.0;
+}
+
+int result1 = multiply(5, 3);
+real result2 = divide(10.0, 2.0);
+greet();
+

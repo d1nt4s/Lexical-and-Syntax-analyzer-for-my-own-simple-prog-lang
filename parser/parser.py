@@ -230,22 +230,26 @@ class Parser:
             decl = self.parse_decl_core()
             return decl
         # попробуем присваивание lvalue '=' expr
+        start = self.ts.peek()
         lvalue = self.parse_postfix()
         self.ts.expect(K.ASSIGN, "Expected '=' in for-init")
         expr = self.parse_expr()
         if not isinstance(lvalue, (Ident, IndexExpr, FieldAccessExpr)):
             raise ParseError(self.ts.last_ok_line, self.ts.last_ok_col, 
                            self.ts.peek(), "Assignment target must be identifier, indexed expression, or field access")
-        return Assign(lvalue=lvalue, expr=expr)
+        end = self.ts.last_ok_tok
+        return Assign(lvalue=lvalue, expr=expr, span=span_from(start, end))
 
     def parse_for_step(self) -> Assign:
+        start = self.ts.peek()
         lvalue = self.parse_postfix()
         self.ts.expect(K.ASSIGN, "Expected '=' in for-step")
         expr = self.parse_expr()
         if not isinstance(lvalue, (Ident, IndexExpr, FieldAccessExpr)):
             raise ParseError(self.ts.last_ok_line, self.ts.last_ok_col, 
                            self.ts.peek(), "Assignment target must be identifier, indexed expression, or field access")
-        return Assign(lvalue=lvalue, expr=expr)
+        end = self.ts.last_ok_tok
+        return Assign(lvalue=lvalue, expr=expr, span=span_from(start, end))
 
     def parse_param(self) -> Param:
         """Parse a typed parameter: type IDENT"""
@@ -269,9 +273,10 @@ class Parser:
         is_proc = False
         ret_type: Optional[TypeSpec] = None
         if self.ts.match(K.PROC):
+            start = self.ts.last_ok_tok
             is_proc = True
         else:
-            self.ts.expect(K.FUNC, "Expected 'func' or 'proc'")
+            start = self.ts.expect(K.FUNC, "Expected 'func' or 'proc'")
             # func требует тип возвращаемого значения
             ret_type = self.parse_type()
 
@@ -281,11 +286,12 @@ class Parser:
         self.ts.expect(K.RPAREN, "Expected ')' after parameters")
 
         body = self.parse_block()
-        return FuncDef(name=name, is_proc=is_proc, ret_type=ret_type, body=body, params=params)
+        end = self.ts.last_ok_tok
+        return FuncDef(name=name, is_proc=is_proc, ret_type=ret_type, body=body, params=params, span=span_from(start, end))
 
     def parse_enum_decl(self) -> EnumDecl:
         """Parse enum declaration: enum Name { A, B, C }"""
-        self.ts.expect(K.ENUM, "Expected 'enum'")
+        start = self.ts.expect(K.ENUM, "Expected 'enum'")
         name = self.ts.expect(K.IDENT, "Expected enum name").lexeme
         self.ts.expect(K.LBRACE, "Expected '{' after enum name")
         members: List[str] = []
@@ -300,53 +306,57 @@ class Parser:
                                        self.ts.peek(), "Expected enum member name")
                     continue
                 break
-        self.ts.expect(K.RBRACE, "Expected '}' after enum members")
-        return EnumDecl(name=name, members=members)
+        end = self.ts.expect(K.RBRACE, "Expected '}' after enum members")
+        return EnumDecl(name=name, members=members, span=span_from(start, end))
 
     def parse_struct_decl(self) -> StructDecl:
         """Parse struct declaration: struct Name { type field; ... }"""
-        self.ts.expect(K.STRUCT, "Expected 'struct'")
+        start = self.ts.expect(K.STRUCT, "Expected 'struct'")
         name = self.ts.expect(K.IDENT, "Expected struct name").lexeme
         self.ts.expect(K.LBRACE, "Expected '{' after struct name")
         fields: List[FieldDecl] = []
         while self.ts.peek().kind != K.RBRACE:
             if self.ts.match(K.SEMI):  # пропустим пустые строки
                 continue
+            field_start = self.ts.peek()
             field_type = self.parse_type()
             field_name = self.ts.expect(K.IDENT, "Expected field name").lexeme
-            self.ts.expect(K.SEMI, "Expected ';' after field declaration")
-            fields.append(FieldDecl(type_spec=field_type, name=field_name))
-        self.ts.expect(K.RBRACE, "Expected '}' after struct body")
-        return StructDecl(name=name, fields=fields)
+            semi = self.ts.expect(K.SEMI, "Expected ';' after field declaration")
+            fields.append(FieldDecl(type_spec=field_type, name=field_name, span=span_from(field_start, semi)))
+        end = self.ts.expect(K.RBRACE, "Expected '}' after struct body")
+        return StructDecl(name=name, fields=fields, span=span_from(start, end))
 
     def parse_return(self) -> Return:
-        self.ts.expect(K.RETURN, "Expected 'return'")
+        start = self.ts.expect(K.RETURN, "Expected 'return'")
         if self.ts.peek().kind == K.SEMI:
-            self.ts.advance()  # ';'
-            return Return(expr=None)
+            end = self.ts.advance()  # ';'
+            return Return(expr=None, span=span_from(start, end))
         expr = self.parse_expr()
-        self.ts.expect(K.SEMI, "Expected ';' after return value")
-        return Return(expr=expr)
+        end = self.ts.expect(K.SEMI, "Expected ';' after return value")
+        return Return(expr=expr, span=span_from(start, end))
 
     def parse_read(self) -> ReadStmt:
-        self.ts.expect(K.READ, "Expected 'read'")
+        start = self.ts.expect(K.READ, "Expected 'read'")
         self.ts.expect(K.LPAREN, "Expected '(' after 'read'")
         name = self.ts.expect(K.IDENT, "Expected identifier in read(...)").lexeme
         self.ts.expect(K.RPAREN, "Expected ')' after read argument")
-        self.ts.expect(K.SEMI, "Expected ';' after read(...)")
-        return ReadStmt(name=name)
+        end = self.ts.expect(K.SEMI, "Expected ';' after read(...)")
+        return ReadStmt(name=name, span=span_from(start, end))
 
     def parse_print(self) -> PrintStmt:
-        self.ts.expect(K.PRINT, "Expected 'print'")
+        start = self.ts.expect(K.PRINT, "Expected 'print'")
         self.ts.expect(K.LPAREN, "Expected '(' after 'print'")
         expr = self.parse_expr()
         self.ts.expect(K.RPAREN, "Expected ')' after print argument")
-        self.ts.expect(K.SEMI, "Expected ';' after print(...)")
-        return PrintStmt(expr=expr)
+        end = self.ts.expect(K.SEMI, "Expected ';' after print(...)")
+        return PrintStmt(expr=expr, span=span_from(start, end))
 
     def parse_decl_stmt(self) -> Decl:
         decl = self.parse_decl_core()
-        self.ts.expect(K.SEMI, "Expected ';' after declaration")
+        end = self.ts.expect(K.SEMI, "Expected ';' after declaration")
+        # Extend span to include semicolon
+        if decl.span:
+            decl.span = SourceSpan(decl.span.start, tok_pos(end))
         return decl
 
     def parse_decl_core(self) -> Decl:

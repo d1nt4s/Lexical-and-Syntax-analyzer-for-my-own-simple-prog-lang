@@ -9,6 +9,7 @@ from parser.ast import (
     EnumDecl, StructDecl, FieldDecl
 )
 from parser.errors import ParseError
+from parser.ast import SourcePos, SourceSpan
 
 # Короткое имя для удобства — поправьте здесь, если ваши имена в TokenKind отличаются
 class K:  # noqa: N801
@@ -62,6 +63,7 @@ class _TokenStream:
         self.i = 0
         self.last_ok_line = 1
         self.last_ok_col = 1
+        self.last_ok_tok: Optional[Token] = None
 
     def peek(self) -> Token:
         return self.toks[self.i]
@@ -75,6 +77,7 @@ class _TokenStream:
         # обновим last_ok только когда продвинулись успешно
         self.last_ok_line = t.line
         self.last_ok_col = t.col
+        self.last_ok_tok = t
         return t
 
     def match(self, *kinds: TokenKind) -> bool:
@@ -102,7 +105,11 @@ class Parser:
             if self.ts.match(K.SEMI):
                 continue
             stmts.append(self.parse_stmt())
-        return Program(stmts=stmts)
+
+        start_tok = self.ts.toks[0] if self.ts.toks else None
+        end_tok = self.ts.last_ok_tok
+        span = span_from(start_tok, end_tok) if (start_tok and end_tok) else None
+        return Program(stmts=stmts, span=span)
 
     # --- Statements ---
 
@@ -156,33 +163,37 @@ class Parser:
                 if not isinstance(lvalue, (Ident, IndexExpr, FieldAccessExpr)):
                     raise ParseError(self.ts.last_ok_line, self.ts.last_ok_col, 
                                    self.ts.peek(), "Assignment target must be identifier, indexed expression, or field access")
-                return Assign(lvalue=lvalue, expr=expr)
+                start = self.ts.toks[save_i]
+                end = self.ts.last_ok_tok
+                return Assign(lvalue=lvalue, expr=expr, span=span_from(start, end))
             # Не присваивание - откатываемся и парсим как выражение
             self.ts.i = save_i
             expr = self.parse_expr()
-            self.ts.expect(K.SEMI, "Expected ';' after expression")
-            return ExprStmt(expr=expr)
+            end = self.ts.expect(K.SEMI, "Expected ';' after expression")
+            start = self.ts.toks[save_i]
+            return ExprStmt(expr=expr, span=span_from(start, end))
         # Обычные выражения (литералы, унарные операторы и т.д.)
         if tok.kind in (K.MINUS, K.NOT, K.PLUS, K.INT_LIT, K.REAL_LIT, K.BOOL_LIT):
+            start = self.ts.peek()
             expr = self.parse_expr()
-            self.ts.expect(K.SEMI, "Expected ';' after expression")
-            return ExprStmt(expr=expr)
+            end = self.ts.expect(K.SEMI, "Expected ';' after expression")
+            return ExprStmt(expr=expr, span=span_from(start, end))
 
         # ничего не подошло
         raise ParseError(self.ts.last_ok_line, self.ts.last_ok_col, tok, "Expected statement")
 
     def parse_block(self) -> Block:
-        self.ts.expect(K.LBRACE, "Expected '{' to start block")
+        start = self.ts.expect(K.LBRACE, "Expected '{' to start block")
         stmts: List[Stmt] = []
         while not self.ts.at_end() and self.ts.peek().kind != K.RBRACE:
-            if self.ts.match(K.SEMI):  # разрешим пустые строки
+            if self.ts.match(K.SEMI):
                 continue
             stmts.append(self.parse_stmt())
-        self.ts.expect(K.RBRACE, "Expected '}' to end block")
-        return Block(stmts=stmts)
+        end = self.ts.expect(K.RBRACE, "Expected '}' to end block")
+        return Block(stmts=stmts, span=span_from(start, end))
 
     def parse_if(self) -> If:
-        self.ts.expect(K.IF, "Expected 'if'")
+        start = self.ts.expect(K.IF, "Expected 'if'")
         self.ts.expect(K.LPAREN, "Expected '(' after 'if'")
         cond = self.parse_expr()
         self.ts.expect(K.RPAREN, "Expected ')' after condition")
@@ -190,30 +201,29 @@ class Parser:
         else_branch: Optional[Stmt] = None
         if self.ts.match(K.ELSE):
             else_branch = self.parse_stmt()
-        return If(cond=cond, then_branch=then_branch, else_branch=else_branch)
+        end = self.ts.last_ok_tok
+        return If(cond=cond, then_branch=then_branch, else_branch=else_branch, span=span_from(start, end))
 
     def parse_for(self) -> For:
-        self.ts.expect(K.FOR, "Expected 'for'")
+        start = self.ts.expect(K.FOR, "Expected 'for'")
         self.ts.expect(K.LPAREN, "Expected '(' after 'for'")
 
-        # init: либо Decl, либо Assign; обязателен, заканчивается ';'
         init = self.parse_for_init()
         self.ts.expect(K.SEMI, "Expected ';' after for-init")
 
-        # cond: опционально выражение до ';'
         cond: Optional[Expr] = None
         if self.ts.peek().kind != K.SEMI:
             cond = self.parse_expr()
         self.ts.expect(K.SEMI, "Expected ';' after for-cond")
 
-        # step: опционально Assign до ')'
         step: Optional[Assign] = None
         if self.ts.peek().kind != K.RPAREN:
             step = self.parse_for_step()
         self.ts.expect(K.RPAREN, "Expected ')' after for-clauses")
 
         body = self.parse_stmt()
-        return For(init=init, cond=cond, step=step, body=body)
+        end = self.ts.last_ok_tok
+        return For(init=init, cond=cond, step=step, body=body, span=span_from(start, end))
 
     def parse_for_init(self) -> Stmt:
         if self.ts.peek().kind in (K.INT, K.REAL, K.BOOL):
@@ -340,12 +350,15 @@ class Parser:
         return decl
 
     def parse_decl_core(self) -> Decl:
+        start = self.ts.peek()
         type_spec = self.parse_type()
-        name = self.ts.expect(K.IDENT, "Expected variable name").lexeme
+        name_tok = self.ts.expect(K.IDENT, "Expected variable name")
+        name = name_tok.lexeme
         init: Optional[Expr] = None
         if self.ts.match(K.ASSIGN):
             init = self.parse_expr()
-        return Decl(type_spec=type_spec, name=name, init=init)
+        end = self.ts.last_ok_tok
+        return Decl(type_spec=type_spec, name=name, init=init, span=span_from(start, end))
 
     def parse_type(self) -> TypeSpec:
         # Parse base type or struct name
@@ -383,20 +396,25 @@ class Parser:
         return self.parse_or()
 
     def parse_or(self) -> Expr:
+        start = self.ts.peek()
         left = self.parse_and()
         while self.ts.match(K.OR):
             right = self.parse_and()
-            left = BinOp(op=OpKind.OR, left=left, right=right)
+            end = self.ts.last_ok_tok
+            left = BinOp(op=OpKind.OR, left=left, right=right, span=span_from(start, end))
         return left
 
     def parse_and(self) -> Expr:
+        start = self.ts.peek()
         left = self.parse_equality()
         while self.ts.match(K.AND):
             right = self.parse_equality()
-            left = BinOp(op=OpKind.AND, left=left, right=right)
+            end = self.ts.last_ok_tok
+            left = BinOp(op=OpKind.AND, left=left, right=right, span=span_from(start, end))
         return left
 
     def parse_equality(self) -> Expr:
+        start = self.ts.peek()
         left = self.parse_relational()
         while True:
             if self.ts.match(K.EQ):
@@ -406,10 +424,12 @@ class Parser:
             else:
                 break
             right = self.parse_relational()
-            left = BinOp(op=op, left=left, right=right)
+            end = self.ts.last_ok_tok
+            left = BinOp(op=op, left=left, right=right, span=span_from(start, end))
         return left
 
     def parse_relational(self) -> Expr:
+        start = self.ts.peek()
         left = self.parse_add()
         while True:
             if self.ts.match(K.LT):
@@ -423,10 +443,12 @@ class Parser:
             else:
                 break
             right = self.parse_add()
-            left = BinOp(op=op, left=left, right=right)
+            end = self.ts.last_ok_tok
+            left = BinOp(op=op, left=left, right=right, span=span_from(start, end))
         return left
 
     def parse_add(self) -> Expr:
+        start = self.ts.peek()
         left = self.parse_mul()
         while True:
             if self.ts.match(K.PLUS):
@@ -436,10 +458,12 @@ class Parser:
             else:
                 break
             right = self.parse_mul()
-            left = BinOp(op=op, left=left, right=right)
+            end = self.ts.last_ok_tok
+            left = BinOp(op=op, left=left, right=right, span=span_from(start, end))
         return left
 
     def parse_mul(self) -> Expr:
+        start = self.ts.peek()
         left = self.parse_unary()
         while True:
             if self.ts.match(K.STAR):
@@ -449,14 +473,20 @@ class Parser:
             else:
                 break
             right = self.parse_unary()
-            left = BinOp(op=op, left=left, right=right)
+            end = self.ts.last_ok_tok
+            left = BinOp(op=op, left=left, right=right, span=span_from(start, end))
         return left
 
     def parse_unary(self) -> Expr:
+        start = self.ts.peek()
         if self.ts.match(K.NOT):
-            return UnOp(op=OpKind.NOT, expr=self.parse_unary())
+            expr = self.parse_unary()
+            end = self.ts.last_ok_tok
+            return UnOp(op=OpKind.NOT, expr=expr, span=span_from(start, end))
         if self.ts.match(K.MINUS):
-            return UnOp(op=OpKind.NEG, expr=self.parse_unary())
+            expr = self.parse_unary()
+            end = self.ts.last_ok_tok
+            return UnOp(op=OpKind.NEG, expr=expr, span=span_from(start, end))
         return self.parse_postfix()
 
     def parse_arguments(self) -> List[Expr]:
@@ -472,30 +502,25 @@ class Parser:
         return args
 
     def parse_postfix(self) -> Expr:
-        """Parse postfix expressions: primary ('(' args? ')' | '[' expr ']' | '.' IDENT)*"""
+        start = self.ts.peek()
         expr = self.parse_primary()
-        # Parse function calls, array indexing, and field access: ('(' args? ')' | '[' expr ']' | '.' IDENT)*
         while True:
-            # Function call: IDENT '(' args? ')'
             if isinstance(expr, Ident) and self.ts.match(K.LPAREN):
                 args = self.parse_arguments()
-                self.ts.expect(K.RPAREN, "Expected ')' after arguments")
-                expr = CallExpr(callee=expr.name, args=args)
+                rpar = self.ts.expect(K.RPAREN, "Expected ')' after arguments")
+                expr = CallExpr(callee=expr.name, args=args, span=span_from(start, rpar))
                 continue
-            # Array indexing: [expr]
             elif self.ts.match(K.LBRACKET):
                 if self.ts.peek().kind == K.RBRACKET:
-                    # Empty index - error
-                    raise ParseError(self.ts.last_ok_line, self.ts.last_ok_col, 
+                    raise ParseError(self.ts.last_ok_line, self.ts.last_ok_col,
                                    self.ts.peek(), "Expected expression inside []")
                 index_expr = self.parse_expr()
-                self.ts.expect(K.RBRACKET, "Expected ']' after index expression")
-                expr = IndexExpr(base=expr, index=index_expr)
+                rbr = self.ts.expect(K.RBRACKET, "Expected ']' after index expression")
+                expr = IndexExpr(base=expr, index=index_expr, span=span_from(start, rbr))
                 continue
-            # Field access: .IDENT
             elif self.ts.match(K.DOT):
-                field_name = self.ts.expect(K.IDENT, "Expected field name after '.'").lexeme
-                expr = FieldAccessExpr(base=expr, field=field_name)
+                field_tok = self.ts.expect(K.IDENT, "Expected field name after '.'")
+                expr = FieldAccessExpr(base=expr, field=field_tok.lexeme, span=span_from(start, field_tok))
                 continue
             else:
                 break
@@ -503,24 +528,28 @@ class Parser:
 
     def parse_primary(self) -> Expr:
         tok = self.ts.peek()
-        # литералы
         if self.ts.match(K.INT_LIT):
-            return Literal(value=tok.value)
+            return Literal(value=tok.value, span=span_from(tok, tok))
         if self.ts.match(K.REAL_LIT):
-            return Literal(value=tok.value)
+            return Literal(value=tok.value, span=span_from(tok, tok))
         if self.ts.match(K.BOOL_LIT):
-            # в зависимости от вашего лексера true/false могут быть BOOL с value True/False
             val = tok.value if tok.value is not None else (tok.lexeme == "true")
-            return Literal(value=val)
-        # идентификатор
+            return Literal(value=val, span=span_from(tok, tok))
         if self.ts.match(K.IDENT):
-            return Ident(name=tok.lexeme)
-        # (expr)
+            return Ident(name=tok.lexeme, span=span_from(tok, tok))
         if self.ts.match(K.LPAREN):
+            start = tok
             e = self.parse_expr()
-            self.ts.expect(K.RPAREN, "Expected ')' after expression")
+            end = self.ts.expect(K.RPAREN, "Expected ')' after expression")
+            e.span = span_from(start, end)  # включаем скобки
             return e
         raise ParseError(self.ts.last_ok_line, self.ts.last_ok_col, tok, "Expected primary expression")
 
 def parse(tokens: List[Token]) -> Program:
     return Parser(tokens).parse()
+
+def tok_pos(tok) -> SourcePos:
+    return SourcePos(tok.line, tok.col)
+
+def span_from(start_tok, end_tok) -> SourceSpan:
+    return SourceSpan(tok_pos(start_tok), tok_pos(end_tok))

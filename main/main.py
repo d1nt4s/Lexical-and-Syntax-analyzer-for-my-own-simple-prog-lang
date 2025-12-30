@@ -12,6 +12,8 @@ import json
 from lexer import scan_all  # твоя функция лексера: scan_all(src) -> list[Token]
 from parser import parse    # твоя функция парсера: parse(tokens) -> Program
 from parser.errors import ParseError
+from semantic.analyzer import analyze  # семантический анализатор
+from semantic.errors import SemanticError
 
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
@@ -53,6 +55,13 @@ def main(argv=None):
     except Exception as e:
         # сюда попадут лексические ошибки, если ты их бросаешь как Exception
         print(f"ERROR: {e}", file=sys.stderr)
+        return 1
+
+    # Семантический анализ
+    try:
+        analyze(program)
+    except SemanticError as e:
+        print(e.format_error(), file=sys.stderr)
         return 1
 
     # Output

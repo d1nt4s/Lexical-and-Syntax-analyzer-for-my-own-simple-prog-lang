@@ -1,0 +1,12 @@
+// Базовые конструкции: объявления, присваивания, print
+int a;
+int b = 10;
+real c = 3.14;
+bool flag = true;
+
+a = 5;
+b = a + 10;
+print(a);
+print(b);
+print(c);
+

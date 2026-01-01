@@ -1,0 +1,24 @@
+// Функции с возвратом значений и вызовами
+func int add(int a, int b) {
+    return a + b;
+}
+
+func int multiply(int x, int y) {
+    return x * y;
+}
+
+func real divide(real a, real b) {
+    if (b != 0.0) {
+        return a / b;
+    }
+    return 0.0;
+}
+
+int result1 = add(5, 3);
+int result2 = multiply(4, 6);
+real result3 = divide(10.0, 2.0);
+
+print(result1);
+print(result2);
+print(result3);
+

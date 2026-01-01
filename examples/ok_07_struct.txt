@@ -1,0 +1,33 @@
+// Структуры: объявления, доступ к полям
+struct Point {
+    int x;
+    int y;
+}
+
+struct Person {
+    int age;
+    real height;
+    bool active;
+}
+
+struct Point p;
+p.x = 10;
+p.y = 20;
+
+int px = p.x;
+int py = p.y;
+
+struct Person person;
+person.age = 25;
+person.height = 1.75;
+person.active = true;
+
+int age = person.age;
+real height = person.height;
+bool active = person.active;
+
+print(px);
+print(py);
+print(age);
+print(height);
+

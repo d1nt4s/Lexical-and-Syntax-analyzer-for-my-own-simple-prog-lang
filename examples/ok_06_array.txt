@@ -1,0 +1,28 @@
+// Массивы: объявления, загрузка и сохранение элементов
+int[] arr;
+int[] numbers;
+
+// Инициализация (если поддерживается)
+// arr[0] = 10;
+// arr[1] = 20;
+
+// Загрузка элементов массива
+int first = arr[0];
+int second = arr[1];
+int index = 5;
+int value = arr[index];
+
+// Сохранение в элементы массива
+arr[0] = 100;
+arr[1] = 200;
+arr[index] = 300;
+
+// Многомерные массивы
+int[][] matrix;
+int elem = matrix[0][1];
+matrix[2][3] = 42;
+
+print(first);
+print(second);
+print(value);
+

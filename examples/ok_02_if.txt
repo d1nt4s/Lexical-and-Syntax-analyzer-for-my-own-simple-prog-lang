@@ -1,0 +1,32 @@
+// If/else с различными сравнениями
+int x = 10;
+int y = 20;
+
+if (x > 5) {
+    print(x);
+}
+
+if (y < 30) {
+    print(y);
+} else {
+    print(0);
+}
+
+if (x == y) {
+    print(1);
+} else {
+    print(0);
+}
+
+if (x != y) {
+    print(1);
+}
+
+if (x >= 10) {
+    print(1);
+}
+
+if (y <= 25) {
+    print(1);
+}
+

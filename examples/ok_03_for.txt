@@ -1,0 +1,22 @@
+// For loop с различными вариантами
+int sum = 0;
+
+// Полный for с init, cond, step
+for (int i = 0; i < 10; i = i + 1) {
+    sum = sum + i;
+    print(i);
+}
+
+// For с присваиванием в init (не decl)
+int j = 0;
+for (j = 0; j < 5; j = j + 1) {
+    print(j);
+}
+
+// For без step (step делается в теле)
+int k = 0;
+for (int m = 0; m < 5; ) {
+    print(m);
+    m = m + 1;
+}
+

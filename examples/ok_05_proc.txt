@@ -1,0 +1,24 @@
+// Процедуры с print и read
+proc printSum(int x, int y) {
+    int sum = x + y;
+    print(sum);
+}
+
+proc readAndPrint() {
+    int value;
+    read(value);
+    print(value);
+}
+
+proc greet() {
+    print(1);
+    print(2);
+    print(3);
+}
+
+int a = 10;
+int b = 20;
+printSum(a, b);
+greet();
+readAndPrint();
+

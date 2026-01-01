@@ -4,7 +4,7 @@ from lexer.tokens import Token, TokenKind
 from parser.ast import (
     Program, Stmt, Block, Decl, Assign, If, For, FuncDef, CallStmt,
     PrintStmt, ReadStmt, Return, ExprStmt,
-    Expr, BinOp, UnOp, Literal, Ident, IndexExpr, CallExpr, FieldAccessExpr, OpKind, TypeKind,
+    Expr, BinOp, UnOp, Literal, Ident, IndexExpr, CallExpr, FieldAccessExpr, CastExpr, OpKind, TypeKind,
     TypeSpec, BaseType, ArrayType, NamedStructType, Param,
     EnumDecl, StructDecl, FieldDecl
 )
@@ -538,6 +538,26 @@ class Parser:
 
     def parse_primary(self) -> Expr:
         tok = self.ts.peek()
+        # Check for cast expressions: int(expr) or real(expr)
+        # We check if current token is KW_INT/KW_REAL AND next token is LPAREN
+        if tok.kind == K.INT:
+            # Check if next token exists and is LPAREN
+            if self.ts.i + 1 < len(self.ts.toks) and self.ts.toks[self.ts.i + 1].kind == K.LPAREN:
+                # This is a cast: int(expr)
+                start = self.ts.expect(K.INT, "Expected 'int' in cast")
+                self.ts.expect(K.LPAREN, "Expected '(' after 'int' in cast")
+                expr = self.parse_expr()
+                end = self.ts.expect(K.RPAREN, "Expected ')' after cast expression")
+                return CastExpr(target_type=TypeKind.INT, expr=expr, span=span_from(start, end))
+        if tok.kind == K.REAL:
+            # Check if next token exists and is LPAREN
+            if self.ts.i + 1 < len(self.ts.toks) and self.ts.toks[self.ts.i + 1].kind == K.LPAREN:
+                # This is a cast: real(expr)
+                start = self.ts.expect(K.REAL, "Expected 'real' in cast")
+                self.ts.expect(K.LPAREN, "Expected '(' after 'real' in cast")
+                expr = self.parse_expr()
+                end = self.ts.expect(K.RPAREN, "Expected ')' after cast expression")
+                return CastExpr(target_type=TypeKind.REAL, expr=expr, span=span_from(start, end))
         if self.ts.match(K.INT_LIT):
             return Literal(value=tok.value, span=span_from(tok, tok))
         if self.ts.match(K.REAL_LIT):

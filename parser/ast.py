@@ -134,6 +134,16 @@ class TypeKind(Enum):
     REAL = auto()
     BOOL = auto()
 
+@dataclass
+class CastExpr(Expr):
+    target_type: TypeKind = TypeKind.INT  # INT or REAL
+    expr: Expr = None
+    def to_json(self) -> Dict[str, Any]:
+        return {"type": "CastExpr", "id": self.id, "target_type": self.target_type.name, "expr": self.expr.to_json()}
+    def pretty(self, indent: int = 0) -> str:
+        pad = "  " * indent
+        return f"{pad}CastExpr#{self.id}({self.target_type.name})\n" + self.expr.pretty(indent + 1)
+
 # --- Type specifications ---
 class TypeSpec(Node):
     """Base class for type specifications."""

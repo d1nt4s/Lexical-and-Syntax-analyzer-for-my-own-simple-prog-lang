@@ -8,8 +8,8 @@ from parser.ast import (
     EnumDecl, StructDecl, FieldDecl,
     Expr, Ident, FieldAccessExpr, CallExpr, IndexExpr,
     BinOp, UnOp, Literal, Return, ExprStmt, PrintStmt, ReadStmt,
-    NamedStructType, BaseType, ArrayType as ASTArrayType, TypeSpec,
-    OpKind, Node
+    CastExpr, NamedStructType, BaseType, ArrayType as ASTArrayType, TypeSpec,
+    OpKind, Node, TypeKind
 )
 from semantic.errors import SemanticError
 from semantic.scope import Scope, Symbol
@@ -332,6 +332,61 @@ class SemanticAnalyzer:
             if func.ret_type is None:
                 raise SemanticError(f"TYPE_ERROR: Function '{expr.callee}' has no return type", func)
             typ = self._type_spec_to_type(func.ret_type)
+        
+        elif isinstance(expr, CastExpr):
+            # Cast expressions: int(expr) or real(expr)
+            expr_type = self._infer_type(expr.expr)
+            
+            if expr.target_type == TypeKind.INT:
+                # Cast to int
+                if expr_type.tag == TypeTag.REAL:
+                    # real -> int: only allowed if expr is literal real with zero fractional part
+                    if isinstance(expr.expr, Literal) and isinstance(expr.expr.value, float):
+                        # Check if fractional part is zero (within floating point precision)
+                        fractional_part = abs(expr.expr.value - float(int(expr.expr.value)))
+                        if fractional_part > 1e-10:  # Allow small floating point errors
+                            raise SemanticError(
+                                "TYPE_ERROR: neispravno kastovanje",
+                                expr
+                            )
+                        typ = INT
+                    else:
+                        # Not a literal real, or not zero fractional part
+                        raise SemanticError(
+                            "TYPE_ERROR: neispravno kastovanje",
+                            expr
+                        )
+                elif expr_type.tag == TypeTag.INT:
+                    # int -> int: no-op, but allowed
+                    typ = INT
+                else:
+                    # Other types cannot be cast to int
+                    raise SemanticError(
+                        f"TYPE_ERROR: Cannot cast {self._type_to_str(expr_type)} to int",
+                        expr
+                    )
+            
+            elif expr.target_type == TypeKind.REAL:
+                # Cast to real
+                if expr_type.tag == TypeTag.INT:
+                    # int -> real: always OK
+                    typ = REAL
+                elif expr_type.tag == TypeTag.REAL:
+                    # real -> real: no-op, but allowed
+                    typ = REAL
+                else:
+                    # Other types cannot be cast to real
+                    raise SemanticError(
+                        f"TYPE_ERROR: Cannot cast {self._type_to_str(expr_type)} to real",
+                        expr
+                    )
+            
+            else:
+                # Cast to bool or other types not allowed
+                raise SemanticError(
+                    f"TYPE_ERROR: Cannot cast to {expr.target_type.name}",
+                    expr
+                )
         
         else:
             raise SemanticError(f"TYPE_ERROR: Cannot infer type for expression", expr)

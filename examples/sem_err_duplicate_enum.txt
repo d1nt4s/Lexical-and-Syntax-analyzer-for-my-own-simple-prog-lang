@@ -6,3 +6,4 @@ enum Direction {
     North  // ОШИБКА: член 'North' уже объявлен
 }
 
+

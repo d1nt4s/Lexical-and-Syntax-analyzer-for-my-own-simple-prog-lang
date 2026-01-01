@@ -18,19 +18,58 @@ from semantic.scope import Scope, Symbol
 
 
 class SemanticAnalyzer:
-    """Семантический анализатор, который проходит по AST и проверяет правила языка."""
+    """
+    Семантический анализатор, который проходит по AST и проверяет правила языка.
+    
+    Как работает:
+    1. Два прохода по AST:
+       - Первый проход: собираем все объявления (struct, enum, функции)
+       - Второй проход: проверяем использование (переменные, функции, поля)
+    
+    2. Использует области видимости (scopes) для отслеживания переменных:
+       - global_scope: глобальная область (функции, глобальные переменные)
+       - current_scope: текущая область (может быть вложенной для блоков, функций)
+    
+    3. Хранит информацию о структурах:
+       - struct_fields: словарь "имя структуры" -> "множество имен полей"
+    """
     
     def __init__(self):
-        # Глобальная область видимости для переменных, функций, типов
+        # Глобальная область видимости - здесь хранятся функции и глобальные переменные
+        # Функции всегда ищутся в глобальной области
         self.global_scope = Scope()
+        
         # Таблица структур: имя struct -> множество имен полей
+        # Пример: {"Point": {"x", "y"}} означает, что struct Point имеет поля x и y
+        # Используется для проверки существования полей при доступе (например, p.x)
         self.struct_fields: Dict[str, Set[str]] = {}
-        # Текущая область видимости (для вложенных блоков)
+        
+        # Текущая область видимости - может меняться при входе в блоки/функции
+        # Изначально равна глобальной области
         self.current_scope: Scope = self.global_scope
     
     def analyze(self, program: Program) -> None:
         """
         Главный метод анализа - запускает проверку всей программы.
+        
+        Алгоритм работы (ВАЖНО - два прохода!):
+        
+        ПРОХОД 1: Сбор объявлений
+        - Проходим по всем statements и собираем информацию о:
+          * Структурах (struct) - проверяем дублирование полей, сохраняем поля
+          * Перечислениях (enum) - проверяем дублирование членов
+          * Функциях (func/proc) - добавляем в таблицу символов
+        
+        Зачем нужен первый проход?
+        - Чтобы знать, какие функции/структуры существуют, когда будем проверять их использование
+        - Пример: func int add() {...} объявлена позже, но используется раньше
+        
+        ПРОХОД 2: Проверка использования
+        - Проходим по всем statements и проверяем:
+          * Объявления переменных (нет ли дублирования)
+          * Использование переменных (объявлены ли они)
+          * Доступ к полям структур (существуют ли поля)
+          * Вызовы функций (объявлены ли функции)
         
         Args:
             program: AST программы для анализа
@@ -38,15 +77,20 @@ class SemanticAnalyzer:
         Raises:
             SemanticError: если найдена семантическая ошибка
         """
-        # Сначала собираем все объявления (struct, enum, func) в глобальной области
+        # ========== ПРОХОД 1: Сбор объявлений ==========
+        # Собираем все объявления (struct, enum, func) в глобальной области
         for stmt in program.stmts:
             if isinstance(stmt, StructDecl):
+                # Проверяем дублирование полей и сохраняем информацию о полях
                 self._check_struct_decl(stmt)
             elif isinstance(stmt, EnumDecl):
+                # Проверяем дублирование членов enum
                 self._check_enum_decl(stmt)
             elif isinstance(stmt, FuncDef):
+                # Добавляем функцию в глобальную таблицу символов
                 self._declare_func(stmt)
         
+        # ========== ПРОХОД 2: Проверка использования ==========
         # Теперь проверяем все statements (включая использование переменных)
         for stmt in program.stmts:
             self._check_stmt(stmt)
@@ -66,8 +110,7 @@ class SemanticAnalyzer:
         for field in struct.fields:
             # Проверяем, не было ли уже поля с таким именем
             if field.name in seen_fields:
-                # Формируем сообщение об ошибке с позицией
-                pos = self._get_position(field)
+                # Позиция ошибки будет извлечена из field.span в format_error()
                 raise SemanticError(
                     f"Duplicate field '{field.name}' in struct '{struct.name}'",
                     field
@@ -95,7 +138,7 @@ class SemanticAnalyzer:
             if member in seen_members:
                 # Для enum members у нас нет прямого доступа к узлу,
                 # но можем использовать span самого enum
-                pos = self._get_position(enum)
+                # Позиция ошибки будет извлечена из enum.span в format_error()
                 raise SemanticError(
                     f"Duplicate member '{member}' in enum '{enum.name}'",
                     enum
@@ -115,7 +158,7 @@ class SemanticAnalyzer:
             self.global_scope.define(symbol)
         except KeyError:
             # Функция уже объявлена - это ошибка
-            pos = self._get_position(func)
+            # Позиция ошибки будет извлечена из func.span в format_error()
             raise SemanticError(
                 f"Function '{func.name}' already declared",
                 func
@@ -155,7 +198,7 @@ class SemanticAnalyzer:
         # Проверяем, не объявлена ли уже переменная в текущей области
         existing = self.current_scope.lookup(decl.name)
         if existing and existing.kind == "var":
-            pos = self._get_position(decl)
+            # Позиция ошибки будет извлечена из decl.span в format_error()
             raise SemanticError(
                 f"Variable '{decl.name}' already declared in this scope",
                 decl
@@ -204,7 +247,7 @@ class SemanticAnalyzer:
             self._check_field_access(expr)
         else:
             # Это не должно произойти при правильном парсинге
-            pos = self._get_position(expr)
+            # Позиция ошибки будет извлечена из expr.span в format_error()
             raise SemanticError(
                 f"Invalid lvalue in assignment",
                 expr
@@ -241,15 +284,34 @@ class SemanticAnalyzer:
         """
         Проверяет использование идентификатора (переменной).
         
+        Как работает:
+        1. Ищем переменную в текущей области видимости (current_scope)
+        2. Если не найдена - ищем в родительской области (scope.lookup делает это автоматически)
+        3. Если не найдена нигде - ошибка
+        
+        Пример:
+        ```minilang
+        int x = 10;        // ← объявлена в глобальной области
+        {
+            int y = 20;    // ← объявлена в локальной области
+            int z = x;     // ← x найдена в родительской области ✓
+        }
+        int w = y;         // ← y не найдена (она в дочерней области) ✗
+        ```
+        
         Args:
             ident: идентификатор
             
         Raises:
             SemanticError: если переменная не объявлена
         """
+        # Ищем переменную в текущей области видимости (и во всех родительских)
+        # scope.lookup автоматически ищет по цепочке: current -> parent -> parent.parent -> ...
         symbol = self.current_scope.lookup(ident.name)
+        
         if symbol is None:
-            pos = self._get_position(ident)
+            # Переменная не найдена ни в одной области видимости - это ошибка
+            # Позиция ошибки будет извлечена из ident.span в format_error()
             raise SemanticError(
                 f"Undeclared variable '{ident.name}'",
                 ident
@@ -259,35 +321,57 @@ class SemanticAnalyzer:
         """
         Проверяет доступ к полю структуры.
         
+        Как работает:
+        1. Проверяем базовое выражение (например, переменную p в p.x)
+        2. Находим тип базового выражения (должен быть struct)
+        3. Ищем структуру в self.struct_fields
+        4. Проверяем, есть ли поле в этой структуре
+        
+        Пример:
+        ```minilang
+        struct Point { int x; int y; }
+        struct Point p;
+        p.x = 10;  // ← проверяем: есть ли поле x в struct Point? ✓
+        p.z = 20;  // ← проверяем: есть ли поле z в struct Point? ✗ ОШИБКА
+        ```
+        
         Args:
-            field_expr: выражение доступа к полю
+            field_expr: выражение доступа к полю (например, p.x)
             
         Raises:
             SemanticError: если поле не существует
         """
-        # Сначала проверяем базовое выражение
+        # Сначала проверяем базовое выражение (например, переменную p)
         self._check_expr(field_expr.base)
         
         # Определяем тип базового выражения
         # Для упрощения, проверяем только случаи, когда base - это Ident с типом struct
+        # (например, p.x, но не arr[i].x)
         if isinstance(field_expr.base, Ident):
-            # Нужно найти тип переменной
+            # Ищем переменную в области видимости
             symbol = self.current_scope.lookup(field_expr.base.name)
+            
             if symbol and symbol.kind == "var":
+                # Получаем объявление переменной
                 decl: Decl = symbol.data
+                
+                # Проверяем, что тип переменной - это struct
                 if isinstance(decl.type_spec, NamedStructType):
-                    struct_name = decl.type_spec.name
-                    # Проверяем, существует ли поле в этой структуре
+                    struct_name = decl.type_spec.name  # Например, "Point"
+                    
+                    # Проверяем, существует ли структура в нашей таблице
                     if struct_name in self.struct_fields:
+                        # Проверяем, есть ли поле в этой структуре
                         if field_expr.field not in self.struct_fields[struct_name]:
-                            pos = self._get_position(field_expr)
+                            # Поле не найдено - ошибка
+                            # Позиция ошибки будет извлечена из field_expr.span в format_error()
                             raise SemanticError(
                                 f"Field '{field_expr.field}' does not exist in struct '{struct_name}'",
                                 field_expr
                             )
                     else:
                         # Структура не найдена (не была объявлена)
-                        pos = self._get_position(field_expr)
+                        # Позиция ошибки будет извлечена из field_expr.span в format_error()
                         raise SemanticError(
                             f"Struct '{struct_name}' not found",
                             field_expr
@@ -306,7 +390,7 @@ class SemanticAnalyzer:
         """
         symbol = self.global_scope.lookup(call.callee)
         if symbol is None or symbol.kind != "func":
-            pos = self._get_position(call)
+            # Позиция ошибки будет извлечена из call.span в format_error()
             raise SemanticError(
                 f"Undeclared function '{call.callee}'",
                 call
@@ -341,14 +425,39 @@ class SemanticAnalyzer:
             self.current_scope = old_scope
     
     def _check_block(self, block: Block) -> None:
-        """Проверяет блок (создает новую область видимости)."""
+        """
+        Проверяет блок (создает новую область видимости).
+        
+        Как работает:
+        1. Сохраняем текущую область видимости
+        2. Создаем новую область с родителем = текущая область
+        3. Проверяем все statements в блоке (они видят переменные из родительской области)
+        4. Восстанавливаем предыдущую область видимости
+        
+        Пример:
+        ```minilang
+        int x = 10;        // ← в глобальной области
+        {
+            int y = 20;    // ← в локальной области (внутри блока)
+            x = 5;         // ← x видна (ищем в родительской области) ✓
+        }
+        y = 30;            // ← y не видна (она была в дочерней области) ✗
+        ```
+        """
+        # Сохраняем текущую область видимости
         old_scope = self.current_scope
+        
+        # Создаем новую область видимости с родителем = текущая область
+        # Это позволяет видеть переменные из внешней области
         self.current_scope = Scope(parent=old_scope)
         
         try:
+            # Проверяем все statements в блоке
             for stmt in block.stmts:
                 self._check_stmt(stmt)
         finally:
+            # ВАЖНО: всегда восстанавливаем предыдущую область видимости
+            # даже если произошла ошибка (благодаря try-finally)
             self.current_scope = old_scope
     
     def _check_func_body(self, func: FuncDef) -> None:
@@ -363,7 +472,7 @@ class SemanticAnalyzer:
                     symbol = Symbol(name=param.name, kind="var", data=param)
                     self.current_scope.define(symbol)
                 except KeyError:
-                    pos = self._get_position(param)
+                    # Позиция ошибки будет извлечена из param.span в format_error()
                     raise SemanticError(
                         f"Duplicate parameter '{param.name}' in function '{func.name}'",
                         param
@@ -374,21 +483,6 @@ class SemanticAnalyzer:
         finally:
             self.current_scope = old_scope
     
-    def _get_position(self, node) -> str:
-        """
-        Получает строковое представление позиции узла из его span.
-        
-        Args:
-            node: узел AST
-            
-        Returns:
-            Строка в формате "line:col" или пустая строка, если span нет
-        """
-        if hasattr(node, 'span') and node.span is not None:
-            return f"{node.span.start.line}:{node.span.start.col}"
-        return ""
-
-
 def analyze(program: Program) -> None:
     """
     Главная функция для запуска семантического анализа.

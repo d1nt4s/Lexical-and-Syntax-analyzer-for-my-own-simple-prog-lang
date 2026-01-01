@@ -41,3 +41,4 @@ func int test() {
 }
 int result = unknownFunc();  // ОШИБКА: функция 'unknownFunc' не объявлена
 
+

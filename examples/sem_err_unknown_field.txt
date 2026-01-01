@@ -6,3 +6,4 @@ struct Point {
 struct Point p;
 p.z = 10;  // ОШИБКА: поле 'z' не существует в struct Point
 
+

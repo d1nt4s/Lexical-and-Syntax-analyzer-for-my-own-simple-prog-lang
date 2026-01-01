@@ -1,3 +1,0 @@
-// trailing comma in enum (not allowed)
-enum E { A, B, }  // syntax error near '}' : expected enum member name
-

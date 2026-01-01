@@ -1,9 +1,0 @@
-// Пример: использование несуществующего поля
-struct Point {
-    int x;
-    int y;
-}
-struct Point p;
-p.z = 10;  // ОШИБКА: поле 'z' не существует в struct Point
-
-

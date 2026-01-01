@@ -1,12 +1,5 @@
 """
-Промежуточное представление (IR) для стек-машины.
-
-Команды IR:
-- push <value> - положить значение на стек
-- операции: add, sub, mul, div, lt, le, gt, ge, eq, neq, and, or, not
-- label <name> - метка для переходов
-- jmp <label> - безусловный переход
-- jmp_if_false <label> - условный переход (если на стеке false, перейти)
+Intermediate Representation (IR) for stack machine.
 """
 from __future__ import annotations
 from dataclasses import dataclass
@@ -15,22 +8,17 @@ from enum import Enum
 
 
 class IROp(Enum):
-    """Операции стек-машины."""
-    # Арифметические операции
+    """Stack machine operations."""
     ADD = "add"
     SUB = "sub"
     MUL = "mul"
     DIV = "div"
-    
-    # Операции сравнения
     LT = "lt"
     LE = "le"
     GT = "gt"
     GE = "ge"
     EQ = "eq"
     NEQ = "neq"
-    
-    # Логические операции
     AND = "and"
     OR = "or"
     NOT = "not"
@@ -38,27 +26,24 @@ class IROp(Enum):
 
 @dataclass
 class IRInstruction:
-    """Базовая инструкция IR."""
+    """Base IR instruction."""
     pass
 
 
 @dataclass
 class Push(IRInstruction):
-    """Команда push: положить значение на стек."""
-    value: Union[int, float, bool, str]  # значение для push
+    """Push value onto stack."""
+    value: Union[int, float, bool, str]
     
     def __str__(self) -> str:
-        # Для булевых значений выводим как true/false (с маленькой буквы)
-        # т.к. в Python bool выводится как True/False
         if isinstance(self.value, bool):
             return f"push {'true' if self.value else 'false'}"
-        # Для остальных типов (int, float, str) выводим как есть
         return f"push {self.value}"
 
 
 @dataclass
 class Op(IRInstruction):
-    """Операция стек-машины (add, sub, mul, div, lt, le, gt, ge, eq, neq, and, or, not)."""
+    """Stack machine operation."""
     op: IROp
     
     def __str__(self) -> str:
@@ -67,7 +52,7 @@ class Op(IRInstruction):
 
 @dataclass
 class Label(IRInstruction):
-    """Метка для переходов."""
+    """Label for jumps."""
     name: str
     
     def __str__(self) -> str:
@@ -76,7 +61,7 @@ class Label(IRInstruction):
 
 @dataclass
 class Jmp(IRInstruction):
-    """Безусловный переход к метке."""
+    """Unconditional jump to label."""
     label: str
     
     def __str__(self) -> str:
@@ -85,7 +70,7 @@ class Jmp(IRInstruction):
 
 @dataclass
 class JmpIfFalse(IRInstruction):
-    """Условный переход: если на стеке false, перейти к метке. Снимает bool со стека."""
+    """Conditional jump: if false on stack, jump to label. Consumes bool from stack."""
     label: str
     
     def __str__(self) -> str:
@@ -94,7 +79,7 @@ class JmpIfFalse(IRInstruction):
 
 @dataclass
 class Pop(IRInstruction):
-    """Удаляет верхнее значение со стека (для очистки стека от результатов выражений)."""
+    """Remove top value from stack."""
     
     def __str__(self) -> str:
         return "pop"
@@ -102,8 +87,8 @@ class Pop(IRInstruction):
 
 @dataclass
 class Store(IRInstruction):
-    """Сохраняет значение в переменную. Берет значение со стека и сохраняет в переменную."""
-    name: str  # имя переменной
+    """Store value to variable. Consumes value from stack."""
+    name: str
     
     def __str__(self) -> str:
         return f"store {self.name}"
@@ -111,8 +96,8 @@ class Store(IRInstruction):
 
 @dataclass
 class Load(IRInstruction):
-    """Загружает значение переменной на стек."""
-    name: str  # имя переменной
+    """Load variable value onto stack."""
+    name: str
     
     def __str__(self) -> str:
         return f"load {self.name}"
@@ -120,7 +105,7 @@ class Load(IRInstruction):
 
 @dataclass
 class StoreIndex(IRInstruction):
-    """Сохраняет значение в элемент массива. Стек: [value, base, index] -> []"""
+    """Store value to array element. Stack: [value, base, index] -> []"""
     
     def __str__(self) -> str:
         return "store_index"
@@ -128,7 +113,7 @@ class StoreIndex(IRInstruction):
 
 @dataclass
 class LoadIndex(IRInstruction):
-    """Загружает элемент массива на стек. Стек: [base, index] -> [value]"""
+    """Load array element onto stack. Stack: [base, index] -> [value]"""
     
     def __str__(self) -> str:
         return "load_index"
@@ -136,8 +121,8 @@ class LoadIndex(IRInstruction):
 
 @dataclass
 class StoreField(IRInstruction):
-    """Сохраняет значение в поле структуры. Стек: [value, base] -> []"""
-    field: str  # имя поля
+    """Store value to struct field. Stack: [value, base] -> []"""
+    field: str
     
     def __str__(self) -> str:
         return f"store_field {self.field}"
@@ -145,8 +130,8 @@ class StoreField(IRInstruction):
 
 @dataclass
 class LoadField(IRInstruction):
-    """Загружает поле структуры на стек. Стек: [base] -> [value]"""
-    field: str  # имя поля
+    """Load struct field onto stack. Stack: [base] -> [value]"""
+    field: str
     
     def __str__(self) -> str:
         return f"load_field {self.field}"
@@ -154,8 +139,8 @@ class LoadField(IRInstruction):
 
 @dataclass
 class Call(IRInstruction):
-    """Вызов функции. Аргументы должны быть на стеке слева-направо."""
-    name: str  # имя функции (формат: func_<name>)
+    """Call function. Arguments must be on stack left-to-right."""
+    name: str
     
     def __str__(self) -> str:
         return f"call {self.name}"
@@ -163,7 +148,7 @@ class Call(IRInstruction):
 
 @dataclass
 class Ret(IRInstruction):
-    """Возврат из процедуры (proc). Не возвращает значение."""
+    """Return from procedure (proc). No return value."""
     
     def __str__(self) -> str:
         return "ret"
@@ -171,25 +156,16 @@ class Ret(IRInstruction):
 
 @dataclass
 class Retv(IRInstruction):
-    """Возврат из функции (func) со значением. Берет значение со стека."""
+    """Return from function (func) with value. Consumes value from stack."""
     
     def __str__(self) -> str:
         return "retv"
 
 
-# Тип для списка инструкций IR
 IRProgram = List[IRInstruction]
 
 
 def ir_to_string(program: IRProgram) -> str:
-    """
-    Преобразует программу IR в строку для вывода.
-    
-    Args:
-        program: список инструкций IR
-        
-    Returns:
-        Строковое представление программы IR
-    """
+    """Convert IR program to string."""
     return "\n".join(str(instr) for instr in program)
 

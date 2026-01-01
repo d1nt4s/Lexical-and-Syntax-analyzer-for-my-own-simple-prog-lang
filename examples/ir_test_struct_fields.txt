@@ -1,9 +1,0 @@
-// Тест генерации IR для полей структур
-struct Point {
-    int x;
-    int y;
-}
-struct Point p;
-int x = p.x;
-p.y = 20;
-

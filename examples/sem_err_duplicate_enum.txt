@@ -1,9 +1,0 @@
-// Пример: дублирование члена в enum
-enum Direction {
-    North,
-    South,
-    East,
-    North  // ОШИБКА: член 'North' уже объявлен
-}
-
-

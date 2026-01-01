@@ -9,13 +9,13 @@ Exit codes:
 import sys
 import json
 
-from lexer import scan_all  # твоя функция лексера: scan_all(src) -> list[Token]
-from parser import parse    # твоя функция парсера: parse(tokens) -> Program
+from lexer import scan_all
+from parser import parse
 from parser.errors import ParseError
-from semantic.analyzer import analyze  # семантический анализатор
+from semantic.analyzer import analyze
 from semantic.errors import SemanticError
-from intermidiate.generator import generate_ir  # генератор IR
-from intermidiate.ir import ir_to_string  # преобразование IR в строку
+from intermidiate.generator import generate_ir
+from intermidiate.ir import ir_to_string
 
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
@@ -70,24 +70,20 @@ def main(argv=None):
         print(f"PARSE ERROR: {e}", file=sys.stderr)
         return 1
     except Exception as e:
-        # сюда попадут лексические ошибки, если ты их бросаешь как Exception
         print(f"ERROR: {e}", file=sys.stderr)
         return 1
 
-    # Семантический анализ
     try:
         analyze(program)
     except SemanticError as e:
         print(e.format_error(), file=sys.stderr)
         return 1
 
-    # Генерация IR (если запрошено)
     if generate_ir_code:
         try:
             ir_program = generate_ir(program)
             ir_code = ir_to_string(ir_program)
             
-            # Выводим IR в файл или на stdout
             if ir_output_file:
                 try:
                     with open(ir_output_file, "w", encoding="utf-8") as f:
@@ -105,7 +101,6 @@ def main(argv=None):
             return 1
         return 0
 
-    # Output AST (если не генерируем IR)
     if as_json:
         print(json.dumps(program.to_json(), ensure_ascii=False, indent=2))
     else:

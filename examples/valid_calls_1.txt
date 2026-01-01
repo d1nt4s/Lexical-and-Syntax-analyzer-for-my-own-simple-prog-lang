@@ -1,8 +1,0 @@
-// typed params + call in expr
-func int add(int a, int b) {
-  return a + b;
-}
-int z;
-z = add(2, 3);
-print(z);
-

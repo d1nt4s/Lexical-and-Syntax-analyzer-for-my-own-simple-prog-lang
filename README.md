@@ -1,82 +1,113 @@
-# Programming Languages — Homework 1 (Stage 5)
+# Compiler Project
 
-**Goal:** deliver a ready-to-submit package with examples, a CLI entry point, and packaging instructions.
+A compiler for a mini-language with lexer, parser, semantic analyzer, and IR code generation.
+
+## Project Structure
+
+```
+Project1/
+├── lexer/          # Lexical analysis
+├── parser/         # Syntax analysis (AST)
+├── semantic/       # Semantic analysis
+├── intermidiate/   # IR code generation
+├── main/           # Main entry point
+├── examples/        # Test examples
+└── tests/          # Unit tests
+```
 
 ## Quick Start
 
+### Basic Usage
+
+Parse a source file and print AST:
 ```bash
-# Run tests (assumes pytest already set up)
-pytest -q
+python3 -m main.main examples/ok_01_basic.txt
+```
 
-# Pretty-print AST:
-python -m main.main examples/valid01_basics.txt
+Generate IR code:
+```bash
+python3 -m main.main examples/ok_01_basic.txt --ir
+```
 
-# JSON AST:
-python -m main.main examples/valid01_basics.txt --json
+Save IR to file:
+```bash
+python3 -m main.main examples/ok_01_basic.txt --ir --ir-output output.ir
+```
 
-# Running all examples
-python scripts/run_all_examples.py
+### Examples
 
-# Run a single example (JSON AST)
-python -m main.main examples/valid_arrays_1.txt --json
+**Valid examples** (`ok_*.txt`):
+- `ok_01_basic.txt` - declarations, assignments, print
+- `ok_02_if.txt` - if/else statements
+- `ok_03_for.txt` - for loops
+- `ok_04_func.txt` - functions with return
+- `ok_05_proc.txt` - procedures
+- `ok_06_array.txt` - arrays (load/store)
+- `ok_07_struct.txt` - structs (field access)
 
-# Run all examples (POSIX shell)
-for f in examples/*.txt; do
-  echo ">>> $f"
-  python -m main.main "$f" --json || true
+**Error examples** (`err_*.txt`):
+- `err_lex_01.txt` - lexical error (unknown character)
+- `err_syn_01.txt` - syntax error (missing semicolon)
+- `err_sem_01.txt` - semantic error (undeclared variable)
+- `err_sem_02.txt` - semantic error (unknown struct field)
+
+### Testing
+
+Run all valid examples:
+```bash
+for f in examples/ok_*.txt; do
+  echo "=== $f ==="
+  python3 -m main.main "$f" --ir
+  echo
 done
-
-## Enums and Structs
-
-### Enum declarations
-```minilang
-enum Color { Red, Green, Blue }
-enum Direction { North, South, East, West }
 ```
 
-### Struct declarations
-```minilang
-struct Point {
-  int x;
-  int y;
-}
-```
-
-### Nominal struct type in declarations
-```minilang
-struct Point p;
-struct Point[] points;
-```
-
-### Field access
-```minilang
-p.x = 10;
-p.y = 20;
-print(p.x);
-```
-
-### Chaining with calls/indices
-```minilang
-arr[i].x = 1;
-print(arr[i].x);
-get().p[i].x;
-```
-
-### Run enum/struct examples
+Test error handling:
 ```bash
-python -m main.main examples/valid_enum_struct_1.txt --json
-python -m main.main examples/valid_struct_array_field_chain.txt --json
-python -m main.main examples/valid_call_field_index_mix.txt --json
+for f in examples/err_*.txt; do
+  echo "=== $f ==="
+  python3 -m main.main "$f" 2>&1
+  echo
+done
 ```
 
-## Calls and typed parameters
+## IR Instructions
 
-# Function with typed parameters
-func int add(int a, int b) { return a + b; }
+Stack machine operations:
+- `push <value>` - push value onto stack
+- `load <name>` - load variable value
+- `store <name>` - store value to variable
+- `add`, `sub`, `mul`, `div` - arithmetic operations
+- `lt`, `le`, `gt`, `ge`, `eq`, `neq` - comparisons
+- `and`, `or`, `not` - logical operations
+- `load_index` - load array element
+- `store_index` - store to array element
+- `load_field <field>` - load struct field
+- `store_field <field>` - store to struct field
+- `call <name>` - call function
+- `ret` - return from procedure
+- `retv` - return from function with value
+- `label <name>` - label for jumps
+- `jmp <label>` - unconditional jump
+- `jmp_if_false <label>` - conditional jump
+- `pop` - remove top value from stack
 
-# Procedure with typed parameter
-proc show(int x) { print(x); }
+## Stack Contract
 
-# Run samples
-python -m main.main examples/valid_calls_1.txt --json
-python -m main.main examples/valid_calls_2.txt --json
+- `gen_expr(expr)` always leaves exactly 1 value on stack
+- `gen_stmt(stmt)` leaves stack empty (no garbage)
+- `jmp_if_false` consumes bool from stack
+
+## Error Messages
+
+- **Lexical errors**: `ERROR: LexError at line:col: message`
+- **Syntax errors**: `PARSE ERROR: ParseError near line:col: message`
+- **Semantic errors**: `Semantic error: line:col: message`
+
+## Requirements
+
+- Python 3.8+
+
+## Documentation
+
+See `intermidiate/README.md` for detailed IR documentation and `intermidiate/EXPLANATION.md` for IR generation explanation.

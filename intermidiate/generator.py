@@ -1,7 +1,5 @@
 """
-Генератор промежуточного кода (IR) из AST.
-
-Преобразует AST в последовательность команд стек-машины.
+IR generator: converts AST to stack machine instructions.
 """
 from __future__ import annotations
 from typing import List
@@ -18,35 +16,24 @@ from intermidiate.ir import (
 
 
 class IRGenerator:
-    """Генератор промежуточного кода из AST."""
+    """Generates IR code from AST."""
     
     def __init__(self):
-        # Счетчик для генерации уникальных меток
         self.label_counter = 0
-        # Список инструкций IR
         self.instructions: List[IRInstruction] = []
     
     def generate(self, program: Program) -> IRProgram:
-        """
-        Генерирует IR из AST программы.
-        
-        Args:
-            program: AST программы
-            
-        Returns:
-            Список инструкций IR
-        """
+        """Generate IR from AST program."""
         self.instructions = []
         self.label_counter = 0
         
-        # Генерируем код для всех statements
         for stmt in program.stmts:
             self._gen_stmt(stmt)
         
         return self.instructions
     
     def _gen_stmt(self, stmt: Stmt) -> None:
-        """Генерирует IR для statement."""
+        """Generate IR for statement. Stack contract: leaves stack empty."""
         if isinstance(stmt, Decl):
             self._gen_decl(stmt)
         elif isinstance(stmt, Assign):
@@ -67,154 +54,85 @@ class IRGenerator:
             self._gen_expr_stmt(stmt)
         elif isinstance(stmt, FuncDef):
             self._gen_func(stmt)
-        # EnumDecl и StructDecl не генерируют код
     
     def _gen_decl(self, decl: Decl) -> None:
-        """
-        Генерирует IR для объявления переменной.
-        
-        Контракт стека: не оставляет значений на стеке.
-        """
-        # Если есть инициализатор, генерируем код для него
+        """Generate IR for variable declaration. Stack contract: leaves stack empty."""
         if decl.init is not None:
-            self._gen_expr(decl.init)  # оставляет 1 значение на стеке
-            # Сохраняем значение в переменную
+            self._gen_expr(decl.init)
             self.instructions.append(Store(decl.name))
-            # Стек чистый
-        # Если инициализатора нет, переменная имеет значение по умолчанию
-        # (не генерируем код, переменная будет неинициализированной)
     
     def _gen_assign(self, assign: Assign) -> None:
-        """
-        Генерирует IR для присваивания.
-        
-        Контракт стека: не оставляет значений на стеке.
-        """
-        # Генерируем код для правой части (выражение)
-        self._gen_expr(assign.expr)  # оставляет 1 значение на стеке
-        
-        # Генерируем код для левой части (lvalue) и сохраняем значение
+        """Generate IR for assignment. Stack contract: leaves stack empty."""
+        self._gen_expr(assign.expr)
         self._gen_lvalue_store(assign.lvalue)
-        # Стек чистый
     
     def _gen_if(self, if_stmt: If) -> None:
-        """
-        Генерирует IR для if statement.
-        
-        Контракт стека: не оставляет значений на стеке.
-        Структура: cond → jmp_if_false else → then → jmp end → label else → else → label end
-        """
-        # Генерируем код для условия (оставляет bool на стеке)
+        """Generate IR for if statement. Stack contract: leaves stack empty."""
         self._gen_expr(if_stmt.cond)
         
-        # Генерируем уникальные метки
         else_label = self._new_label()
         end_label = self._new_label()
         
-        # jmp_if_false снимает bool со стека и переходит, если false
         if if_stmt.else_branch is not None:
             self.instructions.append(JmpIfFalse(else_label))
         else:
             self.instructions.append(JmpIfFalse(end_label))
         
-        # Генерируем код для then ветки (не оставляет значений на стеке)
         self._gen_stmt(if_stmt.then_branch)
         
-        # Если есть else, переходим к концу после then
         if if_stmt.else_branch is not None:
             self.instructions.append(Jmp(end_label))
             self.instructions.append(Label(else_label))
-            # Генерируем код для else ветки (не оставляет значений на стеке)
             self._gen_stmt(if_stmt.else_branch)
         
-        # Метка конца if
         self.instructions.append(Label(end_label))
     
     def _gen_for(self, for_stmt: For) -> None:
-        """
-        Генерирует IR для for loop.
-        
-        Контракт стека: не оставляет значений на стеке.
-        Структура: init → label start → cond → jmp_if_false end → body → step → jmp start → label end
-        """
-        # Генерируем метки
+        """Generate IR for for loop. Stack contract: leaves stack empty."""
         loop_label = self._new_label()
         end_label = self._new_label()
         
-        # Генерируем код для init (не оставляет значений на стеке)
         self._gen_stmt(for_stmt.init)
-        
-        # Метка начала цикла
         self.instructions.append(Label(loop_label))
         
-        # Генерируем код для условия
         if for_stmt.cond is not None:
-            self._gen_expr(for_stmt.cond)  # оставляет bool на стеке
-            # jmp_if_false снимает bool со стека и выходит из цикла, если false
+            self._gen_expr(for_stmt.cond)
             self.instructions.append(JmpIfFalse(end_label))
         
-        # Генерируем код для тела цикла (не оставляет значений на стеке)
         self._gen_stmt(for_stmt.body)
         
-        # Генерируем код для step (не оставляет значений на стеке)
         if for_stmt.step is not None:
             self._gen_assign(for_stmt.step)
         
-        # Переходим к началу цикла
         self.instructions.append(Jmp(loop_label))
-        
-        # Метка конца цикла
         self.instructions.append(Label(end_label))
     
     def _gen_block(self, block: Block) -> None:
-        """Генерирует IR для блока."""
+        """Generate IR for block."""
         for stmt in block.stmts:
             self._gen_stmt(stmt)
     
     def _gen_print(self, print_stmt: PrintStmt) -> None:
-        """
-        Генерирует IR для print statement.
-        
-        Контракт стека: не оставляет значений на стеке.
-        Значение печатается и удаляется.
-        """
-        # Генерируем код для выражения (оставляет 1 значение на стеке)
+        """Generate IR for print statement. Stack contract: leaves stack empty."""
         self._gen_expr(print_stmt.expr)
-        # В реальной реализации здесь был бы вызов функции print, которая берет значение со стека
-        # Для простоты удаляем значение (в реальности print забирает его)
         self.instructions.append(Pop())
     
     def _gen_read(self, read_stmt: ReadStmt) -> None:
-        """
-        Генерирует IR для read statement.
-        
-        Контракт стека: не оставляет значений на стеке.
-        В реальной реализации read читает значение и сохраняет в переменную.
-        """
-        # В стек-машине здесь был бы вызов функции read, которая читает значение
-        # и сохраняет его в переменную read_stmt.name
-        # Для простоты генерируем push 0 и сохраняем (заглушка)
+        """Generate IR for read statement. Stack contract: leaves stack empty."""
         self.instructions.append(Push(0))
         self.instructions.append(Store(read_stmt.name))
     
     def _gen_return(self, return_stmt: Return) -> None:
-        """Генерирует IR для return statement."""
+        """Generate IR for return statement."""
         if return_stmt.expr is not None:
-            # Генерируем код для выражения возврата
             self._gen_expr(return_stmt.expr)
-            # Результат на стеке
-        # В реальной реализации здесь был бы return
+            self.instructions.append(Retv())
+        else:
+            self.instructions.append(Ret())
     
     def _gen_expr_stmt(self, expr_stmt: ExprStmt) -> None:
-        """
-        Генерирует IR для expression statement.
-        
-        Контракт стека: не оставляет значений на стеке.
-        Выражение вычисляется ради побочного эффекта, результат удаляется.
-        """
-        # Генерируем код для выражения (оставляет 1 значение на стеке)
+        """Generate IR for expression statement. Stack contract: leaves stack empty."""
         self._gen_expr(expr_stmt.expr)
-        # Удаляем результат со стека (выражение использовано только ради эффекта)
         self.instructions.append(Pop())
     
     def _gen_func(self, func: FuncDef) -> None:
@@ -227,11 +145,7 @@ class IRGenerator:
         self._gen_block(func.body)
     
     def _gen_expr(self, expr: Expr) -> None:
-        """
-        Генерирует IR для выражения.
-        
-        Контракт стека: всегда оставляет ровно 1 значение на стеке.
-        """
+        """Generate IR for expression. Stack contract: leaves exactly 1 value on stack."""
         if isinstance(expr, Literal):
             self._gen_literal(expr)
         elif isinstance(expr, Ident):
@@ -250,26 +164,18 @@ class IRGenerator:
             raise ValueError(f"Unsupported expression type: {type(expr)}")
     
     def _gen_literal(self, literal: Literal) -> None:
-        """Генерирует IR для литерала."""
+        """Generate IR for literal."""
         self.instructions.append(Push(literal.value))
     
     def _gen_ident(self, ident: Ident) -> None:
-        """
-        Генерирует IR для идентификатора (переменной).
-        
-        Контракт стека: оставляет 1 значение на стеке (значение переменной).
-        """
-        # Загружаем значение переменной на стек
+        """Generate IR for identifier. Stack contract: leaves 1 value on stack."""
         self.instructions.append(Load(ident.name))
     
     def _gen_binop(self, binop: BinOp) -> None:
-        """Генерирует IR для бинарной операции."""
-        # Генерируем код для левого операнда
+        """Generate IR for binary operation."""
         self._gen_expr(binop.left)
-        # Генерируем код для правого операнда
         self._gen_expr(binop.right)
         
-        # Маппинг OpKind -> IROp
         op_map = {
             OpKind.ADD: IROp.ADD,
             OpKind.SUB: IROp.SUB,
@@ -285,74 +191,41 @@ class IRGenerator:
             OpKind.OR: IROp.OR,
         }
         
-        # Генерируем операцию
         if binop.op in op_map:
             self.instructions.append(Op(op_map[binop.op]))
         else:
             raise ValueError(f"Unsupported binary operation: {binop.op}")
     
     def _gen_unop(self, unop: UnOp) -> None:
-        """Генерирует IR для унарной операции."""
-        # Генерируем код для операнда
+        """Generate IR for unary operation."""
         self._gen_expr(unop.expr)
         
-        # Маппинг OpKind -> IROp
         if unop.op == OpKind.NOT:
             self.instructions.append(Op(IROp.NOT))
         elif unop.op == OpKind.NEG:
-            # Отрицание: push 0, затем sub
             self.instructions.append(Push(0))
             self.instructions.append(Op(IROp.SUB))
         else:
             raise ValueError(f"Unsupported unary operation: {unop.op}")
     
     def _gen_index_expr(self, index_expr: IndexExpr) -> None:
-        """
-        Генерирует IR для доступа к элементу массива (выражение).
-        
-        Контракт стека: оставляет 1 значение на стеке (значение элемента).
-        Порядок: base, index -> value
-        """
-        # Генерируем код для base (массив)
-        self._gen_expr(index_expr.base)  # оставляет base на стеке
-        # Генерируем код для index
-        self._gen_expr(index_expr.index)  # оставляет [base, index] на стеке
-        # Загружаем элемент массива
+        """Generate IR for array index access. Stack contract: leaves 1 value on stack."""
+        self._gen_expr(index_expr.base)
+        self._gen_expr(index_expr.index)
         self.instructions.append(LoadIndex())
-        # Стек: [value]
     
     def _gen_field_access_expr(self, field_expr: FieldAccessExpr) -> None:
-        """
-        Генерирует IR для доступа к полю структуры (выражение).
-        
-        Контракт стека: оставляет 1 значение на стеке (значение поля).
-        """
-        # Генерируем код для base (структура)
-        self._gen_expr(field_expr.base)  # оставляет base на стеке
-        # Загружаем поле структуры
+        """Generate IR for struct field access. Stack contract: leaves 1 value on stack."""
+        self._gen_expr(field_expr.base)
         self.instructions.append(LoadField(field_expr.field))
-        # Стек: [value]
     
     def _gen_call_expr(self, call_expr: CallExpr) -> None:
-        """
-        Генерирует IR для вызова функции (выражение).
-        
-        Контракт стека: 
-        - Для func: оставляет 1 значение на стеке (результат функции)
-        - Для proc: не оставляет значений (но это должно проверяться семантикой)
-        
-        Аргументы кладутся на стек слева-направо.
-        """
-        # Генерируем код для аргументов слева-направо
+        """Generate IR for function call. Stack contract: leaves 1 value for func, empty for proc."""
         for arg in call_expr.args:
-            self._gen_expr(arg)  # каждый аргумент оставляет значение на стеке
+            self._gen_expr(arg)
         
-        # Вызываем функцию (формат: func_<name>)
         func_name = f"func_{call_expr.callee}"
         self.instructions.append(Call(func_name))
-        # После вызова:
-        # - Для func: на стеке результат функции (1 значение)
-        # - Для proc: стек пустой (но это должно проверяться семантикой)
     
     def _gen_lvalue_store(self, lvalue: Expr) -> None:
         """
@@ -391,38 +264,23 @@ class IRGenerator:
             raise ValueError(f"Invalid lvalue type: {type(lvalue)}")
     
     def _gen_func(self, func: FuncDef) -> None:
-        """
-        Генерирует IR для функции.
-        
-        Контракт стека: функция должна оставить стек в чистом состоянии.
-        Для func: должен быть return со значением.
-        Для proc: return без значения или неявный ret в конце.
-        """
-        # Генерируем метку для функции (формат: func_<name>)
+        """Generate IR for function/procedure."""
         func_label = f"func_{func.name}"
         self.instructions.append(Label(func_label))
-        
-        # Генерируем код для тела функции
         self._gen_block(func.body)
         
-        # Если это функция (func), а не процедура (proc), и нет явного return,
-        # добавляем fallback return (push 0; retv)
-        # В реальной реализации это должно проверяться семантикой
         if not func.is_proc:
-            # Проверяем, есть ли return в теле (простая проверка)
             has_return = self._has_return_in_block(func.body)
             if not has_return:
-                # Добавляем fallback return
                 self.instructions.append(Push(0))
                 self.instructions.append(Retv())
         else:
-            # Для процедуры, если нет return, добавляем неявный ret
             has_return = self._has_return_in_block(func.body)
             if not has_return:
                 self.instructions.append(Ret())
     
     def _has_return_in_block(self, block: Block) -> bool:
-        """Проверяет, есть ли return в блоке (простая проверка без CFG)."""
+        """Check if block contains return statement (simple check without CFG)."""
         for stmt in block.stmts:
             if isinstance(stmt, Return):
                 return True
@@ -430,10 +288,9 @@ class IRGenerator:
                 if self._has_return_in_block(stmt):
                     return True
             elif isinstance(stmt, If):
-                # Для if проверяем обе ветки (упрощенно)
                 if isinstance(stmt.then_branch, Block) and self._has_return_in_block(stmt.then_branch):
                     if stmt.else_branch is None:
-                        return False  # не все пути ведут к return
+                        return False
                     if isinstance(stmt.else_branch, Block) and self._has_return_in_block(stmt.else_branch):
                         return True
         return False

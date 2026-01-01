@@ -1,0 +1,12 @@
+// Тест генерации IR для функций
+func int add(int a, int b) {
+    return a + b;
+}
+
+proc printSum(int x, int y) {
+    print(x + y);
+}
+
+int result = add(5, 3);
+printSum(10, 20);
+

@@ -8,3 +8,4 @@ struct Point p;
 p.x = 10;
 p.z = 20;  // ошибка: поле 'z' не существует в struct Point
 
+

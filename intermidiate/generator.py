@@ -10,8 +10,7 @@ from parser.ast import (
 )
 from intermidiate.ir import (
     IRProgram, IRInstruction, Push, Op, IROp, Label, Jmp, JmpIfFalse,
-    Pop, Store, Load, StoreIndex, LoadIndex, StoreField, LoadField,
-    Call, Ret, Retv
+    Pop, StoreIndex, LoadIndex, StoreField, LoadField, Call, Ret, Retv
 )
 
 
@@ -59,7 +58,8 @@ class IRGenerator:
         """Generate IR for variable declaration. Stack contract: leaves stack empty."""
         if decl.init is not None:
             self._gen_expr(decl.init)
-            self.instructions.append(Store(decl.name))
+            # Use pop <name> for variable writes (spec requirement)
+            self.instructions.append(Pop(decl.name))
     
     def _gen_assign(self, assign: Assign) -> None:
         """Generate IR for assignment. Stack contract: leaves stack empty."""
@@ -115,12 +115,12 @@ class IRGenerator:
     def _gen_print(self, print_stmt: PrintStmt) -> None:
         """Generate IR for print statement. Stack contract: leaves stack empty."""
         self._gen_expr(print_stmt.expr)
-        self.instructions.append(Pop())
+        self.instructions.append(Pop())  # Discard after printing
     
     def _gen_read(self, read_stmt: ReadStmt) -> None:
         """Generate IR for read statement. Stack contract: leaves stack empty."""
-        self.instructions.append(Push(0))
-        self.instructions.append(Store(read_stmt.name))
+        self.instructions.append(Push(0))  # Placeholder value
+        self.instructions.append(Pop(read_stmt.name))  # Use pop <name> for variable write
     
     def _gen_return(self, return_stmt: Return) -> None:
         """Generate IR for return statement."""
@@ -133,16 +133,7 @@ class IRGenerator:
     def _gen_expr_stmt(self, expr_stmt: ExprStmt) -> None:
         """Generate IR for expression statement. Stack contract: leaves stack empty."""
         self._gen_expr(expr_stmt.expr)
-        self.instructions.append(Pop())
-    
-    def _gen_func(self, func: FuncDef) -> None:
-        """Генерирует IR для функции."""
-        # Генерируем метку для функции
-        func_label = self._new_label()
-        self.instructions.append(Label(func_label))
-        
-        # Генерируем код для тела функции
-        self._gen_block(func.body)
+        self.instructions.append(Pop())  # Discard expression result
     
     def _gen_expr(self, expr: Expr) -> None:
         """Generate IR for expression. Stack contract: leaves exactly 1 value on stack."""
@@ -169,7 +160,8 @@ class IRGenerator:
     
     def _gen_ident(self, ident: Ident) -> None:
         """Generate IR for identifier. Stack contract: leaves 1 value on stack."""
-        self.instructions.append(Load(ident.name))
+        # Use push <name> for variable reads (spec requirement)
+        self.instructions.append(Push(ident.name))
     
     def _gen_binop(self, binop: BinOp) -> None:
         """Generate IR for binary operation."""
@@ -229,37 +221,35 @@ class IRGenerator:
     
     def _gen_lvalue_store(self, lvalue: Expr) -> None:
         """
-        Генерирует IR для сохранения значения в lvalue (левая часть присваивания).
+        Generate IR for storing value to lvalue (left side of assignment).
         
-        Контракт стека: берет значение со стека и сохраняет, стек становится пустым.
-        Предполагается, что значение уже на стеке (после _gen_expr).
+        Stack contract: consumes value from stack, leaves stack empty.
+        Assumes value is already on stack (after _gen_expr).
         """
         if isinstance(lvalue, Ident):
-            # Сохраняем в переменную
-            # На стеке: [value]
-            self.instructions.append(Store(lvalue.name))
-            # Стек: []
+            # Store to variable: use pop <name> (spec requirement)
+            # Stack: [value]
+            self.instructions.append(Pop(lvalue.name))
+            # Stack: []
         elif isinstance(lvalue, IndexExpr):
-            # Сохраняем в элемент массива
-            # На стеке: [value]
-            # Нужно: [base, index, value] для store_index
-            # Генерируем base и index
-            self._gen_expr(lvalue.base)  # теперь: [value, base]
-            self._gen_expr(lvalue.index)  # теперь: [value, base, index]
-            # Порядок для store_index: base, index, value (снизу вверх)
-            # Но у нас value сверху, нужно переставить
-            # В стек-машине обычно используется порядок: base, index, value
-            # Используем соглашение: value, base, index -> store_index (value сверху, читается снизу)
+            # Store to array element
+            # Stack: [value]
+            # Need: [base, index, value] for store_index
+            # Generate base and index
+            self._gen_expr(lvalue.base)  # now: [value, base]
+            self._gen_expr(lvalue.index)  # now: [value, base, index]
+            # For spec compliance, we need to use only push/pop/operations
+            # store_index is a pseudo-instruction, keep it for now
             self.instructions.append(StoreIndex())
-            # Стек: []
+            # Stack: []
         elif isinstance(lvalue, FieldAccessExpr):
-            # Сохраняем в поле структуры
-            # На стеке: [value]
-            # Генерируем base
-            self._gen_expr(lvalue.base)  # теперь: [value, base]
-            # Сохраняем в поле (порядок: value, base -> store_field)
+            # Store to struct field
+            # Stack: [value]
+            # Generate base
+            self._gen_expr(lvalue.base)  # now: [value, base]
+            # store_field is a pseudo-instruction, keep it for now
             self.instructions.append(StoreField(lvalue.field))
-            # Стек: []
+            # Stack: []
         else:
             raise ValueError(f"Invalid lvalue type: {type(lvalue)}")
     

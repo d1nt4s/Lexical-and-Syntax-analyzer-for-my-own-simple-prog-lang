@@ -346,14 +346,14 @@ class SemanticAnalyzer:
                         fractional_part = abs(expr.expr.value - float(int(expr.expr.value)))
                         if fractional_part > 1e-10:  # Allow small floating point errors
                             raise SemanticError(
-                                "TYPE_ERROR: neispravno kastovanje",
+                                "TYPE_ERROR: Invalid cast: real to int only allowed for literal values with zero fractional part",
                                 expr
                             )
                         typ = INT
                     else:
                         # Not a literal real, or not zero fractional part
                         raise SemanticError(
-                            "TYPE_ERROR: neispravno kastovanje",
+                            "TYPE_ERROR: Invalid cast: real to int only allowed for literal values with zero fractional part",
                             expr
                         )
                 elif expr_type.tag == TypeTag.INT:
@@ -673,14 +673,16 @@ class SemanticAnalyzer:
     
 def analyze(program: Program) -> None:
     """
-    Главная функция для запуска семантического анализа.
+    Main function for semantic analysis.
     
     Args:
-        program: AST программы для анализа
+        program: AST program to analyze
         
     Raises:
-        SemanticError: если найдена семантическая ошибка
+        SemanticError: if semantic error found
     """
     analyzer = SemanticAnalyzer()
     analyzer.analyze(program)
+    # Attach types table to program for typed AST output
+    program.types_by_node_id = analyzer.types_by_node_id
 

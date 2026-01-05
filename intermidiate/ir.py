@@ -3,7 +3,7 @@ Intermediate Representation (IR) for stack machine.
 """
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import List, Union, Any
+from typing import List, Union, Any, Optional
 from enum import Enum
 
 
@@ -32,7 +32,7 @@ class IRInstruction:
 
 @dataclass
 class Push(IRInstruction):
-    """Push value onto stack."""
+    """Push value or variable onto stack. For variables, use push <name>."""
     value: Union[int, float, bool, str]
     
     def __str__(self) -> str:
@@ -79,9 +79,12 @@ class JmpIfFalse(IRInstruction):
 
 @dataclass
 class Pop(IRInstruction):
-    """Remove top value from stack."""
+    """Remove top value from stack. With operand: pop <name> stores value to variable."""
+    name: Optional[str] = None  # If provided, stores value to variable before popping
     
     def __str__(self) -> str:
+        if self.name is not None:
+            return f"pop {self.name}"
         return "pop"
 
 

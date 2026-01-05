@@ -1,41 +1,35 @@
-# Генерация промежуточного кода (IR)
+# Intermediate Representation (IR) Generation
 
-Пакет `intermidiate` содержит генератор промежуточного кода для стек-машины.
+The `intermidiate` package contains the IR generator for a stack machine.
 
-## Структура
+## Structure
 
-- `ir.py` - определения команд IR (Push, Op, Label, Jmp, JmpIfFalse, и др.)
-- `generator.py` - генератор IR из AST
-- `__init__.py` - экспорты пакета
+- `ir.py` - IR instruction definitions (Push, Op, Label, Jmp, JmpIfFalse, etc.)
+- `generator.py` - IR generator from AST
+- `__init__.py` - package exports
 
 ## IR Instruction Set
 
-### Базовые операции со стеком
+### Base Stack Operations
 
 #### `push <value>`
-Кладет значение на стек. Значение может быть:
-- Число: `push 10`, `push 3.14`
-- Булево: `push true`, `push false`
-- Строка (для литералов): `push "hello"`
+Pushes a value onto the stack. Value can be:
+- Number: `push 10`, `push 3.14`
+- Boolean: `push true`, `push false`
+- Variable name: `push x` (reads variable x and pushes its value)
 
-**Контракт стека:** `[] -> [value]`
+**Stack contract:** `[] -> [value]`
 
-#### `pop`
-Удаляет верхнее значение со стека. Используется для очистки стека от результатов выражений, которые используются только ради побочного эффекта.
+**Note:** For variables, `push <name>` is used instead of `load <name>` (spec requirement).
 
-**Контракт стека:** `[value] -> []`
+#### `pop [<name>]`
+Removes top value from stack. With operand: `pop <name>` stores value to variable before popping.
 
-### Загрузка и сохранение переменных
+**Stack contract:**
+- `pop`: `[value] -> []`
+- `pop <name>`: `[value] -> []` (stores value to variable `name`)
 
-#### `load <name>`
-Загружает значение переменной на стек.
-
-**Контракт стека:** `[] -> [value]`
-
-#### `store <name>`
-Сохраняет значение в переменную. Берет значение со стека.
-
-**Контракт стека:** `[value] -> []`
+**Note:** `pop <name>` is used for variable writes instead of `store <name>` (spec requirement).
 
 ### Операции
 
@@ -56,151 +50,185 @@
 - `and`, `or`: `[a, b] -> [bool]`
 - `not`: `[a] -> [bool]`
 
-### Работа с массивами
+### Array Operations (Pseudo-instructions)
 
 #### `load_index`
-Загружает элемент массива на стек. Берет base (массив) и index со стека.
+Loads array element onto stack. Takes base (array) and index from stack.
 
-**Контракт стека:** `[base, index] -> [value]`
+**Stack contract:** `[base, index] -> [value]`
 
-**Пример:**
+**Note:** This is a pseudo-instruction. It can be expanded to base instructions using pointer arithmetic and memory access operations.
+
+**Example:**
 ```
-load a      # загружаем массив a
-push 5      # индекс
-load_index  # загружаем a[5]
+push a      # load array a (using push <name>)
+push 5      # index
+load_index  # load a[5]
 ```
 
 #### `store_index`
-Сохраняет значение в элемент массива. Берет value, base и index со стека.
+Stores value to array element. Takes value, base and index from stack.
 
-**Контракт стека:** `[value, base, index] -> []`
+**Stack contract:** `[value, base, index] -> []`
 
-**Пример:**
+**Note:** This is a pseudo-instruction, expandable to base instructions.
+
+**Example:**
 ```
-push 10     # значение
-load a      # массив
-push 5      # индекс
-store_index # сохраняем a[5] = 10
+push 10     # value
+push a      # array (using push <name>)
+push 5      # index
+store_index # store a[5] = 10
 ```
 
-### Работа с полями структур
+### Struct Field Operations (Pseudo-instructions)
 
 #### `load_field <field>`
-Загружает поле структуры на стек. Берет base (структуру) со стека.
+Loads struct field onto stack. Takes base (struct) from stack.
 
-**Контракт стека:** `[base] -> [value]`
+**Stack contract:** `[base] -> [value]`
 
-**Пример:**
+**Note:** This is a pseudo-instruction, expandable to base instructions using field offset calculations.
+
+**Example:**
 ```
-load p      # загружаем структуру p
-load_field x # загружаем p.x
+push p      # load struct p (using push <name>)
+load_field x # load p.x
 ```
 
 #### `store_field <field>`
-Сохраняет значение в поле структуры. Берет value и base со стека.
+Stores value to struct field. Takes value and base from stack.
 
-**Контракт стека:** `[value, base] -> []`
+**Stack contract:** `[value, base] -> []`
 
-**Пример:**
+**Note:** This is a pseudo-instruction, expandable to base instructions.
+
+**Example:**
 ```
-push 10     # значение
-load p      # структура
-store_field x # сохраняем p.x = 10
+push 10     # value
+push p      # struct (using push <name>)
+store_field x # store p.x = 10
 ```
 
-### Метки и переходы
+### Labels and Jumps
 
 #### `label <name>`
-Метка для переходов.
+Label for jumps (pseudo-string, optional for readability).
 
 #### `jmp <label>`
-Безусловный переход к метке.
+Unconditional jump to label.
 
 #### `jmp_if_false <label>`
-Условный переход: если на стеке false, переходит к метке. **Снимает bool со стека.**
+Conditional jump: if false on stack, jumps to label. **Consumes bool from stack.**
 
-**Контракт стека:** `[bool] -> []`
+**Stack contract:** `[bool] -> []`
 
-**Пример:**
+**Note:** This is a macro instruction. It expands to: pop bool, push false, eq, jmp_if_false (or equivalent sequence). For simplicity, it's kept as a single instruction but documented as expandable.
+
+**Example:**
 ```
 push x
 push 5
-gt          # [true] или [false]
-jmp_if_false L0  # если false, переходим к L0, bool снят со стека
-# здесь выполняется код, если true
+gt          # [true] or [false]
+jmp_if_false L0  # if false, jump to L0, bool consumed from stack
+# code here if true
 label L0
-# здесь выполняется код, если false
+# code here if false
 ```
 
-### Вызовы функций
+### Function Calls and Returns (IR Extensions)
+
+**Note:** The following instructions (`call`, `ret`, `retv`) are IR extensions beyond the base instruction set. They correspond to base instructions as follows:
 
 #### `call <name>`
-Вызывает функцию. Аргументы должны быть на стеке слева-направо. После вызова на стеке результат функции (для func) или пустой стек (для proc).
+Calls a function. Arguments must be on stack left-to-right. After call, stack contains function result (for func) or is empty (for proc).
 
-**Контракт стека:**
-- Для `func`: `[arg1, arg2, ...] -> [result]`
-- Для `proc`: `[arg1, arg2, ...] -> []`
+**Stack contract:**
+- For `func`: `[arg1, arg2, ...] -> [result]`
+- For `proc`: `[arg1, arg2, ...] -> []`
 
-**Формат имени:** `func_<name>` (например, `func_add`)
+**Name format:** `func_<name>` (e.g., `func_add`)
 
-**Пример:**
+**Correspondence to base instructions:** `call <name>` is equivalent to:
+- Push return address onto return stack
+- `jmp func_<name>`
+- Label for return point
+- (Function body executes)
+- `jmp <return_address>` (handled by `ret`/`retv`)
+
+**Example:**
 ```
-push 5      # первый аргумент
-push 3      # второй аргумент
-call func_add # вызов add(5, 3), результат на стеке
+push 5      # first argument
+push 3      # second argument
+call func_add # call add(5, 3), result on stack
 ```
-
-### Возврат из функций
 
 #### `ret`
-Возврат из процедуры (proc). Не возвращает значение.
+Return from procedure (proc). No return value.
 
-**Контракт стека:** `[] -> []` (стек должен быть пустым)
+**Stack contract:** `[] -> []` (stack must be empty)
+
+**Correspondence to base instructions:** `ret` is equivalent to `jmp <return_address>` (jump back to caller).
 
 #### `retv`
-Возврат из функции (func) со значением. Берет значение со стека и возвращает его.
+Return from function (func) with value. Consumes value from stack and returns it.
 
-**Контракт стека:** `[value] -> []`
+**Stack contract:** `[value] -> []`
 
-**Пример:**
+**Correspondence to base instructions:** `retv` is equivalent to:
+- Keep value on stack (or move to return register)
+- `jmp <return_address>` (jump back to caller)
+
+**Example:**
 ```
 push 10
-retv       # возвращает 10
+retv       # returns 10
 ```
 
-## Контракт стека
+## IR Extensions
 
-### Правила генерации IR
+This IR implementation uses some extensions beyond the base instruction set for convenience:
 
-1. **`gen_expr(expr)`** всегда оставляет ровно 1 значение на стеке
-2. **`gen_stmt(stmt)`** не оставляет мусора на стеке (стек чистый после выполнения)
-3. **`jmp_if_false`** снимает bool со стека перед переходом
-4. **Выражения как statements** (ExprStmt) удаляют результат явной инструкцией `pop`
+1. **`jmp_if_false`** - Macro instruction that expands to: pop bool, push false, eq, conditional jump logic
+2. **`call`, `ret`, `retv`** - Function call/return instructions (correspond to jmp-based calling convention with return address stack)
+3. **`load_index`, `store_index`** - Array access pseudo-instructions (expandable to base instructions)
+4. **`load_field`, `store_field`** - Struct field access pseudo-instructions (expandable to base instructions)
 
-### Примеры контракта
+These extensions are documented with their correspondence to base instructions (push/pop/jmp/operations).
+
+## Stack Contract
+
+### IR Generation Rules
+
+1. **`gen_expr(expr)`** always leaves exactly 1 value on stack
+2. **`gen_stmt(stmt)`** leaves no garbage on stack (stack is clean after execution)
+3. **`jmp_if_false`** consumes bool from stack before jumping
+4. **Expression statements** (ExprStmt) discard result with explicit `pop` instruction
+
+### Stack Contract Examples
 
 ```minilang
-int x = 10;  // gen_expr(10) -> [10], store x -> []
-int y = x;   // gen_expr(x) -> [10], store y -> []
+int x = 10;  // gen_expr(10) -> [10], pop x -> []
+int y = x;   // gen_expr(x) -> [10], pop y -> []
 x + y;       // gen_expr(x+y) -> [20], pop -> []
 ```
 
-## Использование
+## Usage
 
-### Генерация IR в stdout
+### Generate IR to stdout
 ```bash
-python3 -m main.main examples/span_test_simple.txt --ir
+python3 -m main.main examples/ok_01_basic.txt --ir
 ```
 
-### Генерация IR в файл
+### Generate IR to file
 ```bash
-python3 -m main.main examples/span_test_simple.txt --ir --ir-output output.ir
+python3 -m main.main examples/ok_01_basic.txt --ir --ir-output output.ir
 ```
 
-## Примеры
+## Examples
 
-### Простое присваивание
-**Исходный код:**
+### Simple Assignment
+**Source code:**
 ```minilang
 int x = 10;
 int y = 20;
@@ -210,29 +238,29 @@ int z = x + y;
 **IR:**
 ```
 push 10
-store x
+pop x
 push 20
-store y
-load x
-load y
+pop y
+push x
+push y
 add
-store z
+pop z
 ```
 
-**Пошаговое выполнение:**
+**Step-by-step execution:**
 ```
-push 10    → стек: [10]
-store x    → стек: [] (x = 10)
-push 20    → стек: [20]
-store y    → стек: [] (y = 20)
-load x     → стек: [10]
-load y     → стек: [10, 20]
-add        → стек: [30]
-store z    → стек: [] (z = 30)
+push 10    → stack: [10]
+pop x      → stack: [] (x = 10)
+push 20    → stack: [20]
+pop y      → stack: [] (y = 20)
+push x     → stack: [10] (read x)
+push y     → stack: [10, 20] (read y)
+add        → stack: [30]
+pop z      → stack: [] (z = 30)
 ```
 
-### If statement
-**Исходный код:**
+### If Statement
+**Source code:**
 ```minilang
 if (x > 5) {
     print(x);
@@ -243,11 +271,11 @@ if (x > 5) {
 
 **IR:**
 ```
-load x
+push x
 push 5
 gt
 jmp_if_false L0
-load x
+push x
 pop
 jmp L1
 label L0
@@ -256,12 +284,12 @@ pop
 label L1
 ```
 
-**Пояснение:**
-- `jmp_if_false L0` снимает bool со стека и переходит, если false
-- `pop` удаляет результат print (используется только ради эффекта)
+**Explanation:**
+- `jmp_if_false L0` consumes bool from stack and jumps if false
+- `pop` discards print result (used only for side effect)
 
-### For loop
-**Исходный код:**
+### For Loop
+**Source code:**
 ```minilang
 for (int i = 0; i < 10; i = i + 1) {
     print(i);
@@ -271,26 +299,26 @@ for (int i = 0; i < 10; i = i + 1) {
 **IR:**
 ```
 push 0
-store i
+pop i
 label L0
-load i
+push i
 push 10
 lt
 jmp_if_false L1
-load i
+push i
 pop
-load i
+push i
 push 1
 add
-store i
+pop i
 jmp L0
 label L1
 ```
 
-**Структура:** init → label start → cond → jmp_if_false end → body → step → jmp start → label end
+**Structure:** init → label start → cond → jmp_if_false end → body → step → jmp start → label end
 
-### Доступ к массиву
-**Исходный код:**
+### Array Access
+**Source code:**
 ```minilang
 int x = a[5];
 a[5] = 10;
@@ -298,18 +326,18 @@ a[5] = 10;
 
 **IR:**
 ```
-load a
+push a
 push 5
 load_index
-store x
+pop x
 push 10
-load a
+push a
 push 5
 store_index
 ```
 
-### Доступ к полю структуры
-**Исходный код:**
+### Struct Field Access
+**Source code:**
 ```minilang
 struct Point { int x; int y; }
 struct Point p;
@@ -319,16 +347,16 @@ p.y = 20;
 
 **IR:**
 ```
-load p
+push p
 load_field x
-store x
+pop x
 push 20
-load p
+push p
 store_field y
 ```
 
-### Вызов функции
-**Исходный код:**
+### Function Call
+**Source code:**
 ```minilang
 func int add(int a, int b) {
     return a + b;
@@ -339,23 +367,23 @@ int result = add(5, 3);
 **IR:**
 ```
 label func_add
-load a
-load b
+push a
+push b
 add
 retv
 push 5
 push 3
 call func_add
-store result
+pop result
 ```
 
-**Пояснение:**
-- Аргументы кладутся на стек слева-направо: `push 5`, `push 3`
-- `call func_add` вызывает функцию, результат на стеке
-- `retv` возвращает значение из функции
+**Explanation:**
+- Arguments pushed left-to-right: `push 5`, `push 3`
+- `call func_add` calls function, result on stack
+- `retv` returns value from function
 
-### Вызов процедуры
-**Исходный код:**
+### Procedure Call
+**Source code:**
 ```minilang
 proc printSum(int x, int y) {
     print(x + y);
@@ -366,8 +394,8 @@ printSum(10, 20);
 **IR:**
 ```
 label func_printSum
-load x
-load y
+push x
+push y
 add
 pop
 ret
@@ -377,42 +405,42 @@ call func_printSum
 pop
 ```
 
-**Пояснение:**
-- `ret` возвращает из процедуры без значения
-- После вызова proc стек должен быть пустым (pop удаляет мусор, если есть)
+**Explanation:**
+- `ret` returns from procedure without value
+- After proc call, stack should be empty (pop removes garbage if any)
 
-## Архитектура
+## Architecture
 
-Генерация IR происходит после семантического анализа:
+IR generation happens after semantic analysis:
 
 ```
-Исходный код
+Source code
   ↓
-Лексер (токены)
+Lexer (tokens)
   ↓
-Парсер (AST)
+Parser (AST)
   ↓
-Семантический анализатор
+Semantic analyzer
   ↓
-Генератор IR (IR код)
+IR generator (IR code)
   ↓
-Вывод IR (stdout или файл)
+IR output (stdout or file)
 ```
 
 ## API
 
 ### `generate_ir(program: Program) -> IRProgram`
-Генерирует IR из AST программы.
+Generates IR from AST program.
 
 ### `ir_to_string(program: IRProgram) -> str`
-Преобразует список инструкций IR в строку для вывода.
+Converts IR instruction list to string for output.
 
-## Fallback return
+## Fallback Return
 
-Если функция (func) не имеет явного return во всех путях выполнения, генератор добавляет fallback return:
+If a function (func) doesn't have an explicit return in all execution paths, the generator adds a fallback return:
 ```
 push 0
 retv
 ```
 
-Это гарантирует, что функция всегда возвращает значение. В реальной реализации это должно проверяться семантическим анализатором через анализ потока управления (CFG).
+This ensures the function always returns a value. In a real implementation, this should be checked by the semantic analyzer through control flow graph (CFG) analysis.

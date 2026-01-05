@@ -74,43 +74,9 @@ for f in examples/err_*.txt; do
 done
 ```
 
-## IR Instructions
-
-Stack machine operations:
-- `push <value>` - push value onto stack
-- `load <name>` - load variable value
-- `store <name>` - store value to variable
-- `add`, `sub`, `mul`, `div` - arithmetic operations
-- `lt`, `le`, `gt`, `ge`, `eq`, `neq` - comparisons
-- `and`, `or`, `not` - logical operations
-- `load_index` - load array element
-- `store_index` - store to array element
-- `load_field <field>` - load struct field
-- `store_field <field>` - store to struct field
-- `call <name>` - call function
-- `ret` - return from procedure
-- `retv` - return from function with value
-- `label <name>` - label for jumps
-- `jmp <label>` - unconditional jump
-- `jmp_if_false <label>` - conditional jump
-- `pop` - remove top value from stack
-
-## Stack Contract
-
-- `gen_expr(expr)` always leaves exactly 1 value on stack
-- `gen_stmt(stmt)` leaves stack empty (no garbage)
-- `jmp_if_false` consumes bool from stack
-
 ## Error Messages
 
 - **Lexical errors**: `ERROR: LexError at line:col: message`
 - **Syntax errors**: `PARSE ERROR: ParseError near line:col: message`
 - **Semantic errors**: `Semantic error: line:col: message`
 
-## Requirements
-
-- Python 3.8+
-
-## Documentation
-
-See `intermidiate/README.md` for detailed IR documentation and `intermidiate/EXPLANATION.md` for IR generation explanation.

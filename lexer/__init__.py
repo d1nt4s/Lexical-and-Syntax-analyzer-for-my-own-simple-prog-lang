@@ -3,7 +3,7 @@ from .tokens import Token, TokenKind
 from .errors import LexError
 
 def scan_all(src: str):
-    """Удобная функция для сканирования всей строки в список токенов."""
+    """Convenience function to scan entire string into token list."""
     return Lexer(src).scan_all()
 
 __all__ = ["Lexer", "Token", "TokenKind", "LexError", "scan_all"]

@@ -3,10 +3,10 @@ from dataclasses import dataclass, field
 from typing import Any, List, Dict, Optional
 from enum import Enum, auto
 
-# === Выражения (из Этапа 3) ===
+# === Expressions (from Stage 3) ===
 
 class OpKind(Enum):
-    # бинарные
+    # binary
     OR = auto()      # ||
     AND = auto()     # &&
     EQ = auto()      # ==
@@ -19,7 +19,7 @@ class OpKind(Enum):
     SUB = auto()
     MUL = auto()
     DIV = auto()
-    # унарные
+    # unary
     NEG = auto()     # -
     NOT = auto()     # !
 
@@ -193,7 +193,7 @@ class FieldAccessExpr(Expr):
         type_str = self._get_type_str(types_by_node_id)
         return f"{pad}FieldAccessExpr#{self.id}({self.field}){type_str}\n" + self.base.pretty(indent + 1, types_by_node_id)
 
-# === Операторы и верхний уровень (Этап 4) ===
+# === Statements and top level (Stage 4) ===
 
 class TypeKind(Enum):
     INT = auto()
@@ -204,11 +204,16 @@ class TypeKind(Enum):
 class CastExpr(Expr):
     target_type: TypeKind = TypeKind.INT  # INT or REAL
     expr: Expr = None
-    def to_json(self) -> Dict[str, Any]:
-        return {"type": "CastExpr", "id": self.id, "target_type": self.target_type.name, "expr": self.expr.to_json()}
-    def pretty(self, indent: int = 0) -> str:
+    def to_json(self, types_by_node_id: Optional[Dict[int, Any]] = None) -> Dict[str, Any]:
+        result = {"type": "CastExpr", "id": self.id, "target_type": self.target_type.name, "expr": self.expr.to_json(types_by_node_id)}
+        type_str = self._get_type_str(types_by_node_id)
+        if type_str:
+            result["ty"] = type_str.lstrip(':')
+        return result
+    def pretty(self, indent: int = 0, types_by_node_id: Optional[Dict[int, Any]] = None) -> str:
         pad = "  " * indent
-        return f"{pad}CastExpr#{self.id}({self.target_type.name})\n" + self.expr.pretty(indent + 1)
+        type_str = self._get_type_str(types_by_node_id)
+        return f"{pad}CastExpr#{self.id}({self.target_type.name}){type_str}\n" + self.expr.pretty(indent + 1, types_by_node_id)
 
 # --- Type specifications ---
 class TypeSpec(Node):
@@ -320,11 +325,11 @@ class Decl(Stmt):
     init: Optional[Expr] = None
     @property
     def type(self) -> TypeKind:
-        """Обратная совместимость: возвращает TypeKind из type_spec"""
+        """Backward compatibility: returns TypeKind from type_spec"""
         if isinstance(self.type_spec, BaseType):
             return self.type_spec.kind
         elif isinstance(self.type_spec, ArrayType):
-            # Для массивов возвращаем базовый тип
+            # For arrays, return base type
             base = self.type_spec.base
             while isinstance(base, ArrayType):
                 base = base.base
@@ -348,7 +353,7 @@ class Assign(Stmt):
     expr: Expr = None
     @property
     def name(self) -> str:
-        """Обратная совместимость: возвращает имя из lvalue если это Ident"""
+        """Backward compatibility: returns name from lvalue if it's Ident"""
         if isinstance(self.lvalue, Ident):
             return self.lvalue.name
         return ""
@@ -363,16 +368,16 @@ class If(Stmt):
     cond: Expr = None
     then_branch: Stmt = None
     else_branch: Optional[Stmt] = None
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self, types_by_node_id: Optional[Dict[int, Any]] = None) -> Dict[str, Any]:
         obj = {"type": "If", "id": self.id,
-               "cond": self.cond.to_json(),
-               "then": self.then_branch.to_json()}
-        if self.else_branch is not None: obj["else"] = self.else_branch.to_json()
+               "cond": self.cond.to_json(types_by_node_id),
+               "then": self.then_branch.to_json(types_by_node_id)}
+        if self.else_branch is not None: obj["else"] = self.else_branch.to_json(types_by_node_id)
         return obj
-    def pretty(self, indent: int = 0) -> str:
+    def pretty(self, indent: int = 0, types_by_node_id: Optional[Dict[int, Any]] = None) -> str:
         pad = "  " * indent
-        s = f"{pad}If#{self.id}\n" + self.cond.pretty(indent + 1) + self.then_branch.pretty(indent + 1)
-        if self.else_branch: s += self.else_branch.pretty(indent + 1)
+        s = f"{pad}If#{self.id}\n" + self.cond.pretty(indent + 1, types_by_node_id) + self.then_branch.pretty(indent + 1, types_by_node_id)
+        if self.else_branch: s += self.else_branch.pretty(indent + 1, types_by_node_id)
         return s
 
 @dataclass
@@ -430,12 +435,12 @@ class Return(Stmt):
 
 @dataclass
 class FuncDef(Stmt):
-    # функции могут возвращать значение (func) или быть процедурами (proc)
+    # functions can return value (func) or be procedures (proc)
     name: str = ""
     is_proc: bool = True
-    ret_type: Optional[TypeSpec] = None    # только если is_proc == False
+    ret_type: Optional[TypeSpec] = None    # only if is_proc == False
     body: Block = None
-    params: List[Param] = field(default_factory=list)  # типизированные параметры
+    params: List[Param] = field(default_factory=list)  # typed parameters
     def to_json(self, types_by_node_id: Optional[Dict[int, Any]] = None) -> Dict[str, Any]:
         obj = {"type": "FuncDef", "id": self.id, "name": self.name,
                "kind": "proc" if self.is_proc else "func",
@@ -471,7 +476,7 @@ class CallStmt(Stmt):
         for a in self.args: s += a.pretty(indent + 1, types_by_node_id)
         return s
 
-# Верхний уровень
+# Top level
 
 @dataclass
 class Program(Node):

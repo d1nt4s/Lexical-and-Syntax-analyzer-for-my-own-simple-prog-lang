@@ -1,0 +1,8 @@
+// Valid cast: real to int for literal with zero fractional part
+proc main() {
+    int x = int(3.0);  // OK: literal real with zero fractional part
+    int y = int(5.0);  // OK: literal real with zero fractional part
+    print(x);
+    print(y);
+}
+

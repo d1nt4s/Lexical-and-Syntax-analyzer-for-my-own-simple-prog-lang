@@ -1,5 +1,9 @@
 """
-Intermediate Representation (IR) for stack machine.
+5) Примеры
+Добавь минимум 2 новых semantic error примера:
+- type mismatch int + real без кастования (должно падать)
+- неверный cast real->int (например int(1.2))
+И один ok пример с разрешённым cast real->int где дробная часть .0 (например int(3.0)).Intermediate Representation (IR) for stack machine.
 """
 from __future__ import annotations
 from dataclasses import dataclass

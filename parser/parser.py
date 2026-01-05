@@ -11,7 +11,7 @@ from parser.ast import (
 from parser.errors import ParseError
 from parser.ast import SourcePos, SourceSpan
 
-# Короткое имя для удобства — поправьте здесь, если ваши имена в TokenKind отличаются
+# Short name alias for convenience - adjust here if your TokenKind names differ
 class K:  # noqa: N801
     INT = TokenKind.KW_INT
     REAL = TokenKind.KW_REAL
@@ -41,7 +41,7 @@ class K:  # noqa: N801
     EOF = TokenKind.EOF
     ENUM = TokenKind.KW_ENUM
     STRUCT = TokenKind.KW_STRUCT
-    # операторы для выражений/унараных уже поддерживаются Этапом 3:
+    # operators for expressions/unary are already supported by Stage 3:
     PLUS = TokenKind.PLUS
     MINUS = TokenKind.MINUS
     STAR = TokenKind.STAR
@@ -56,7 +56,7 @@ class K:  # noqa: N801
     GE = TokenKind.GE
     NOT = TokenKind.NOT
 
-# === Внутренний поток токенов с запоминанием last_ok ===
+# === Internal token stream with last_ok tracking ===
 class _TokenStream:
     def __init__(self, tokens: List[Token]) -> None:
         self.toks = tokens
@@ -74,7 +74,7 @@ class _TokenStream:
     def advance(self) -> Token:
         t = self.peek()
         self.i += 1
-        # обновим last_ok только когда продвинулись успешно
+        # update last_ok only when we successfully advanced
         self.last_ok_line = t.line
         self.last_ok_col = t.col
         self.last_ok_tok = t
@@ -92,7 +92,7 @@ class _TokenStream:
             raise ParseError(self.last_ok_line, self.last_ok_col, tok, msg)
         return self.advance()
 
-# === Парсер ===
+# === Parser ===
 
 class Parser:
     def __init__(self, tokens: List[Token]) -> None:
@@ -101,7 +101,7 @@ class Parser:
     def parse(self) -> Program:
         stmts: List[Stmt] = []
         while not self.ts.at_end():
-            # пустые ; разрешим — просто пропустим
+            # allow empty ; - just skip them
             if self.ts.match(K.SEMI):
                 continue
             stmts.append(self.parse_stmt())
@@ -116,7 +116,7 @@ class Parser:
     def parse_stmt(self) -> Stmt:
         tok = self.ts.peek()
 
-        # блок
+        # block
         if tok.kind == K.LBRACE:
             return self.parse_block()
         # enum
@@ -124,8 +124,8 @@ class Parser:
             return self.parse_enum_decl()
         # struct
         if tok.kind == K.STRUCT:
-            # Проверяем, что это объявление struct, а не тип struct Name
-            # Если следующий токен IDENT, а затем LBRACE - это объявление
+            # Check if this is a struct declaration, not a struct Name type
+            # If next token is IDENT, then LBRACE - it's a declaration
             if self.ts.i + 1 < len(self.ts.toks) and self.ts.toks[self.ts.i + 1].kind == K.IDENT:
                 if self.ts.i + 2 < len(self.ts.toks) and self.ts.toks[self.ts.i + 2].kind == K.LBRACE:
                     return self.parse_struct_decl()
@@ -146,17 +146,17 @@ class Parser:
             return self.parse_read()
         if tok.kind == K.PRINT:
             return self.parse_print()
-        # объявления типов (int, real, bool, struct Name)
+        # type declarations (int, real, bool, struct Name)
         if tok.kind in (K.INT, K.REAL, K.BOOL) or (tok.kind == K.STRUCT):
             return self.parse_decl_stmt()
-        # присваивание или вызов/expr;
-        # Присваивание может начинаться только с IDENT или LPAREN (для индексирования)
-        # Для остальных сразу парсим как выражение
+        # assignment or call/expr;
+        # Assignment can only start with IDENT or LPAREN (for indexing)
+        # For others, parse as expression immediately
         if tok.kind == K.IDENT or tok.kind == K.LPAREN:
-            # Попытка присваивания: lvalue (Ident или IndexExpr) '=' expr ';'
-            # Сохраняем позицию для отката, если это не присваивание
+            # Try assignment: lvalue (Ident or IndexExpr) '=' expr ';'
+            # Save position for rollback if it's not an assignment
             save_i = self.ts.i
-            lvalue = self.parse_postfix()  # может быть Ident или IndexExpr
+            lvalue = self.parse_postfix()  # can be Ident or IndexExpr
             if self.ts.match(K.ASSIGN):
                 expr = self.parse_expr()
                 self.ts.expect(K.SEMI, "Expected ';' after assignment")
@@ -166,20 +166,20 @@ class Parser:
                 start = self.ts.toks[save_i]
                 end = self.ts.last_ok_tok
                 return Assign(lvalue=lvalue, expr=expr, span=span_from(start, end))
-            # Не присваивание - откатываемся и парсим как выражение
+            # Not an assignment - rollback and parse as expression
             self.ts.i = save_i
             expr = self.parse_expr()
             end = self.ts.expect(K.SEMI, "Expected ';' after expression")
             start = self.ts.toks[save_i]
             return ExprStmt(expr=expr, span=span_from(start, end))
-        # Обычные выражения (литералы, унарные операторы и т.д.)
+        # Regular expressions (literals, unary operators, etc.)
         if tok.kind in (K.MINUS, K.NOT, K.PLUS, K.INT_LIT, K.REAL_LIT, K.BOOL_LIT):
             start = self.ts.peek()
             expr = self.parse_expr()
             end = self.ts.expect(K.SEMI, "Expected ';' after expression")
             return ExprStmt(expr=expr, span=span_from(start, end))
 
-        # ничего не подошло
+        # nothing matched
         raise ParseError(self.ts.last_ok_line, self.ts.last_ok_col, tok, "Expected statement")
 
     def parse_block(self) -> Block:
@@ -229,7 +229,7 @@ class Parser:
         if self.ts.peek().kind in (K.INT, K.REAL, K.BOOL):
             decl = self.parse_decl_core()
             return decl
-        # попробуем присваивание lvalue '=' expr
+        # try assignment lvalue '=' expr
         start = self.ts.peek()
         lvalue = self.parse_postfix()
         self.ts.expect(K.ASSIGN, "Expected '=' in for-init")
@@ -277,7 +277,7 @@ class Parser:
             is_proc = True
         else:
             start = self.ts.expect(K.FUNC, "Expected 'func' or 'proc'")
-            # func требует тип возвращаемого значения
+            # func requires return type
             ret_type = self.parse_type()
 
         name = self.ts.expect(K.IDENT, "Expected function/procedure name").lexeme
@@ -300,7 +300,7 @@ class Parser:
                 member_tok = self.ts.expect(K.IDENT, "Expected enum member name")
                 members.append(member_tok.lexeme)
                 if self.ts.match(K.COMMA):
-                    # Проверяем, не является ли следующая лексема закрывающей скобкой
+                    # Check if next token is closing parenthesis
                     if self.ts.peek().kind == K.RBRACE:
                         raise ParseError(self.ts.last_ok_line, self.ts.last_ok_col,
                                        self.ts.peek(), "Expected enum member name")
@@ -316,7 +316,7 @@ class Parser:
         self.ts.expect(K.LBRACE, "Expected '{' after struct name")
         fields: List[FieldDecl] = []
         while self.ts.peek().kind != K.RBRACE:
-            if self.ts.match(K.SEMI):  # пропустим пустые строки
+            if self.ts.match(K.SEMI):  # skip empty statements
                 continue
             field_start = self.ts.peek()
             field_type = self.parse_type()
@@ -398,9 +398,9 @@ class Parser:
             return ArrayType(base=base, dims=dims)
         return base
 
-    # === НИЖЕ — КАСКАД ВЫРАЖЕНИЙ Этапа 3. Оставьте как есть в вашем проекте ===
-    # Если у вас это в отдельном классе — просто импортируйте. Ниже — минимальная заготовка,
-    # замените её на вашу реализацию из Этапа 3.
+    # === BELOW — EXPRESSION CASCADE from Stage 3. Keep as is in your project ===
+    # If you have this in a separate class - just import it. Below is a minimal stub,
+    # replace it with your implementation from Stage 3.
 
     def parse_expr(self) -> Expr:
         return self.parse_or()
@@ -571,7 +571,7 @@ class Parser:
             start = tok
             e = self.parse_expr()
             end = self.ts.expect(K.RPAREN, "Expected ')' after expression")
-            e.span = span_from(start, end)  # включаем скобки
+            e.span = span_from(start, end)  # include parentheses
             return e
         raise ParseError(self.ts.last_ok_line, self.ts.last_ok_col, tok, "Expected primary expression")
 

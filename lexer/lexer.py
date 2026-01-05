@@ -180,11 +180,11 @@ class Lexer:
             kind = single.get(ch)
             if kind is None:
                 if ch == '.':
-                    # Проверяем, не является ли это частью числа (например, 1.5)
-                    # Если следующий символ цифра, это ошибка - числа должны быть в формате d+.d+
+                    # Check if this is part of a number (e.g., 1.5)
+                    # If next char is digit, it's an error - numbers must be in format d+.d+
                     if self.peek().isdigit():
                         raise LexError("Unexpected '.' (reals must be like d+.d+)", start_line, start_col)
-                    # Иначе это токен точки для доступа к полю
+                    # Otherwise it's a dot token for field access
                     tokens.append(self.make(TokenKind.DOT, ch, start_line, start_col))
                     continue
                 raise LexError(f"Unknown character '{ch}'", start_line, start_col)

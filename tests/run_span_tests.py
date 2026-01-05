@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Простой скрипт для запуска тестов spans без pytest.
-Можно запустить: python3 tests/run_span_tests.py
+Simple script to run span tests without pytest.
+Can be run: python3 tests/run_span_tests.py
 """
 import sys
 from pathlib import Path
 
-# Добавляем корневую директорию в путь
+# Add root directory to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
@@ -20,8 +20,8 @@ from parser.ast import (
 
 
 def test_all_statements_have_spans():
-    """Проверяем, что все statements имеют spans."""
-    print("Test 1: Все statements имеют spans...", end=" ")
+    """Check that all statements have spans."""
+    print("Test 1: All statements have spans...", end=" ")
     src = """
     int x = 1;
     if (x < 5) { print(x); }
@@ -34,14 +34,14 @@ def test_all_statements_have_spans():
     prog = parse(scan_all(src))
     
     for stmt in prog.stmts:
-        assert stmt.span is not None, f"{type(stmt).__name__} должен иметь span"
+        assert stmt.span is not None, f"{type(stmt).__name__} must have span"
         assert isinstance(stmt.span, SourceSpan)
     print("✓ OK")
 
 
 def test_decl_span_includes_semicolon():
-    """Проверяем, что span Decl включает точку с запятой."""
-    print("Test 2: Decl span включает точку с запятой...", end=" ")
+    """Check that Decl span includes semicolon."""
+    print("Test 2: Decl span includes semicolon...", end=" ")
     src = "int x = 10;"
     prog = parse(scan_all(src))
     
@@ -52,8 +52,8 @@ def test_decl_span_includes_semicolon():
 
 
 def test_enum_decl_has_span():
-    """Проверяем, что EnumDecl имеет span."""
-    print("Test 3: EnumDecl имеет span...", end=" ")
+    """Check that EnumDecl has span."""
+    print("Test 3: EnumDecl has span...", end=" ")
     src = "enum Color { Red, Green, Blue };"
     prog = parse(scan_all(src))
     
@@ -66,8 +66,8 @@ def test_enum_decl_has_span():
 
 
 def test_struct_decl_has_span_and_field_decl_spans():
-    """Проверяем, что StructDecl и FieldDecl имеют spans."""
-    print("Test 4: StructDecl и FieldDecl имеют spans...", end=" ")
+    """Check that StructDecl and FieldDecl have spans."""
+    print("Test 4: StructDecl and FieldDecl have spans...", end=" ")
     src = """
     struct Point {
         int x;
@@ -89,8 +89,8 @@ def test_struct_decl_has_span_and_field_decl_spans():
 
 
 def test_funcdef_has_span():
-    """Проверяем, что FuncDef имеет span."""
-    print("Test 5: FuncDef имеет span...", end=" ")
+    """Check that FuncDef has span."""
+    print("Test 5: FuncDef has span...", end=" ")
     src = """
     func int add(int a, int b) {
         return a + b;
@@ -116,8 +116,8 @@ def test_funcdef_has_span():
 
 
 def test_return_span_includes_semicolon():
-    """Проверяем, что Return имеет span."""
-    print("Test 6: Return имеет span...", end=" ")
+    """Check that Return has span."""
+    print("Test 6: Return has span...", end=" ")
     src = """
     return 42;
     return;
@@ -137,8 +137,8 @@ def test_return_span_includes_semicolon():
 
 
 def test_read_print_spans():
-    """Проверяем, что ReadStmt и PrintStmt имеют spans."""
-    print("Test 7: ReadStmt и PrintStmt имеют spans...", end=" ")
+    """Check that ReadStmt and PrintStmt have spans."""
+    print("Test 7: ReadStmt and PrintStmt have spans...", end=" ")
     src = """
     read(x);
     print(10 + 20);
@@ -158,8 +158,8 @@ def test_read_print_spans():
 
 
 def test_for_loop_assign_spans():
-    """Проверяем, что Assign в for-init и for-step имеют spans."""
-    print("Test 8: Assign в for-loop имеют spans...", end=" ")
+    """Check that Assign in for-init and for-step have spans."""
+    print("Test 8: Assign in for-loop have spans...", end=" ")
     src = """
     for (int i = 0; i < 10; i = i + 1) {
         print(i);
@@ -186,8 +186,8 @@ def test_for_loop_assign_spans():
 
 
 def test_span_consistency():
-    """Проверяем консистентность spans."""
-    print("Test 9: Консистентность spans...", end=" ")
+    """Check span consistency."""
+    print("Test 9: Span consistency...", end=" ")
     src = """
     int x = 1;
     struct Point { int x; real y; };
@@ -211,9 +211,9 @@ def test_span_consistency():
 
 
 def main():
-    """Запускает все тесты."""
+    """Run all tests."""
     print("=" * 60)
-    print("Запуск тестов для проверки spans")
+    print("Running span tests")
     print("=" * 60)
     print()
     

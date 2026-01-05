@@ -1,0 +1,6 @@
+// Semantic error: invalid cast - real to int only allowed for literal values with zero fractional part
+proc main() {
+    real x = 1.2;
+    int y = int(x);  // TYPE_ERROR: Invalid cast: real to int only allowed for literal values with zero fractional part
+}
+

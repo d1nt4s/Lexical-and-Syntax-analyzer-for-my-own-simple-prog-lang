@@ -6,7 +6,7 @@ from typing import List
 from parser.ast import (
     Program, Stmt, Decl, Assign, If, For, FuncDef, Block,
     PrintStmt, ReadStmt, Return, ExprStmt,
-    Expr, BinOp, UnOp, Literal, Ident, IndexExpr, FieldAccessExpr, CallExpr, OpKind
+    Expr, BinOp, UnOp, Literal, Ident, IndexExpr, FieldAccessExpr, CallExpr, CastExpr, OpKind
 )
 from intermidiate.ir import (
     IRProgram, IRInstruction, Push, Op, IROp, Label, Jmp, JmpIfFalse,
@@ -151,6 +151,8 @@ class IRGenerator:
             self._gen_field_access_expr(expr)
         elif isinstance(expr, CallExpr):
             self._gen_call_expr(expr)
+        elif isinstance(expr, CastExpr):
+            self._gen_cast_expr(expr)
         else:
             raise ValueError(f"Unsupported expression type: {type(expr)}")
     
@@ -218,6 +220,14 @@ class IRGenerator:
         
         func_name = f"func_{call_expr.callee}"
         self.instructions.append(Call(func_name))
+    
+    def _gen_cast_expr(self, cast_expr: CastExpr) -> None:
+        """Generate IR for cast expression. Stack contract: leaves 1 value on stack."""
+        # Generate the expression being cast
+        self._gen_expr(cast_expr.expr)
+        # Cast operations are handled at runtime - for now, just leave the value on stack
+        # The cast itself doesn't need special IR instructions (type conversion happens at runtime)
+        # If needed, we could add cast instructions, but for now we just pass through
     
     def _gen_lvalue_store(self, lvalue: Expr) -> None:
         """
@@ -287,21 +297,21 @@ class IRGenerator:
     
     def _gen_return(self, return_stmt: Return) -> None:
         """
-        Генерирует IR для return statement.
+        Generate IR for return statement.
         
-        Контракт стека: для func - оставляет значение на стеке, затем retv.
-        Для proc - просто ret (без значения).
+        Stack contract: for func - leaves value on stack, then retv.
+        For proc - just ret (no value).
         """
         if return_stmt.expr is not None:
-            # Функция возвращает значение
-            self._gen_expr(return_stmt.expr)  # оставляет значение на стеке
+            # Function returns a value
+            self._gen_expr(return_stmt.expr)  # leaves value on stack
             self.instructions.append(Retv())
         else:
-            # Процедура возвращается без значения
+            # Procedure returns without value
             self.instructions.append(Ret())
     
     def _new_label(self) -> str:
-        """Генерирует уникальное имя метки."""
+        """Generate unique label name."""
         label = f"L{self.label_counter}"
         self.label_counter += 1
         return label
@@ -309,13 +319,13 @@ class IRGenerator:
 
 def generate_ir(program: Program) -> IRProgram:
     """
-    Главная функция для генерации IR из AST.
+    Main function for generating IR from AST.
     
     Args:
-        program: AST программы
+        program: AST program
         
     Returns:
-        Список инструкций IR
+        List of IR instructions
     """
     generator = IRGenerator()
     return generator.generate(program)

@@ -1,0 +1,7 @@
+// Semantic error: type mismatch - int + real without casting
+proc main() {
+    int x = 10;
+    real y = 3.14;
+    int z = x + y;  // TYPE_ERROR: type mismatch - cannot add int and real without casting
+}
+

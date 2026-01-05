@@ -1,5 +1,5 @@
 class SemanticError(Exception):
-    """Исключение для семантических ошибок."""
+    """Exception for semantic errors."""
     def __init__(self, message: str, node=None):
         self.message = message
         self.node = node
@@ -7,10 +7,10 @@ class SemanticError(Exception):
     
     def format_error(self) -> str:
         """
-        Форматирует сообщение об ошибке с позицией.
+        Format error message with position.
         
         Returns:
-            Строка в формате "Semantic error: line:col: message" или "Semantic error: message"
+            String in format "Semantic error: line:col: message" or "Semantic error: message"
         """
         pos = ""
         if self.node is not None and hasattr(self.node, 'span') and self.node.span is not None:

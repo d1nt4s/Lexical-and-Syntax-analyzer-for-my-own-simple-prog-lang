@@ -16,11 +16,13 @@ proc greet() {
     print(3);
 }
 
-int a = 10;
-int b = 20;
-printSum(a, b);
-greet();
-readAndPrint();
+proc main() {
+    int a = 10;
+    int b = 20;
+    printSum(a, b);
+    greet();
+    readAndPrint();
+}
 
 
 

@@ -10,26 +10,28 @@ struct Person {
     bool active;
 }
 
-struct Point p;
-p.x = 10;
-p.y = 20;
+proc main() {
+    struct Point p;
+    p.x = 10;
+    p.y = 20;
 
-int px = p.x;
-int py = p.y;
+    int px = p.x;
+    int py = p.y;
 
-struct Person person;
-person.age = 25;
-person.height = 1.75;
-person.active = true;
+    struct Person person;
+    person.age = 25;
+    person.height = 1.75;
+    person.active = true;
 
-int age = person.age;
-real height = person.height;
-bool active = person.active;
+    int age = person.age;
+    real height = person.height;
+    bool active = person.active;
 
-print(px);
-print(py);
-print(age);
-print(height);
+    print(px);
+    print(py);
+    print(age);
+    print(height);
+}
 
 
 

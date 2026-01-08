@@ -138,8 +138,13 @@ class SemanticAnalyzer:
                 return f"struct {typ.name}"
         return "unknown"
     
-    def _infer_type(self, expr: Expr) -> Type:
-        """Infer type of expression and store it."""
+    def _infer_type(self, expr: Expr, allow_proc: bool = False) -> Type:
+        """Infer type of expression and store it.
+        
+        Args:
+            expr: Expression to infer type for
+            allow_proc: If True, allow procedure calls (for ExprStmt)
+        """
         if expr.id in self.types_by_node_id:
             return self.types_by_node_id[expr.id]
         
@@ -321,17 +326,22 @@ class SemanticAnalyzer:
                 param_type = self._type_spec_to_type(param.type_spec)
                 self._check_type_compat(param_type, arg_type, arg_expr, f" in argument {i+1} of '{expr.callee}'")
             
-            # Check if proc is used in expression
+            # Check if proc is used in expression (not allowed unless allow_proc=True)
             if func.is_proc:
-                raise SemanticError(
-                    f"TYPE_ERROR: Procedure '{expr.callee}' cannot be used in expression",
-                    expr
-                )
+                if allow_proc:
+                    # Procedure call in ExprStmt: return VOID type
+                    typ = VOID
+                else:
+                    raise SemanticError(
+                        f"TYPE_ERROR: Procedure '{expr.callee}' cannot be used in expression",
+                        expr
+                    )
+            else:
+                # Return type
+                if func.ret_type is None:
+                    raise SemanticError(f"TYPE_ERROR: Function '{expr.callee}' has no return type", func)
+                typ = self._type_spec_to_type(func.ret_type)
             
-            # Return type
-            if func.ret_type is None:
-                raise SemanticError(f"TYPE_ERROR: Function '{expr.callee}' has no return type", func)
-            typ = self._type_spec_to_type(func.ret_type)
         
         elif isinstance(expr, CastExpr):
             # Cast expressions: int(expr) or real(expr)
@@ -454,8 +464,9 @@ class SemanticAnalyzer:
             self._check_return(stmt)
         elif isinstance(stmt, ExprStmt):
             # Expression statement: infer type but don't require specific type
+            # Allow procedure calls in ExprStmt
             if stmt.expr is not None:
-                self._infer_type(stmt.expr)
+                self._infer_type(stmt.expr, allow_proc=True)
         elif isinstance(stmt, PrintStmt):
             # Print: can print any type
             if stmt.expr is not None:

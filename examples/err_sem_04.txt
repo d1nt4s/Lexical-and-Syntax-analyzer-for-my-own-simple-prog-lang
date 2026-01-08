@@ -4,3 +4,4 @@ proc main() {
     int y = int(x);  // TYPE_ERROR: Invalid cast: real to int only allowed for literal values with zero fractional part
 }
 
+

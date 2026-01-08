@@ -5,3 +5,4 @@ proc main() {
     int z = x + y;  // TYPE_ERROR: type mismatch - cannot add int and real without casting
 }
 
+

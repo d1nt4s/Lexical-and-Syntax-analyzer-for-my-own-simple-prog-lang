@@ -7,7 +7,7 @@ proc main() {
         sum = sum + i;
         print(i);
     }
-
+    i = 5;
     // For с присваиванием в init (не decl)
     int j = 0;
     for (j = 0; j < 5; j = j + 1) {
